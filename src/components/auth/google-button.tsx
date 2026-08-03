@@ -1,9 +1,9 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { signInWithGoogle } from "@/app/actions/auth";
+import { createClient } from "@/lib/supabase/client";
 
 function GoogleMark() {
   return (
@@ -28,17 +28,10 @@ function GoogleMark() {
   );
 }
 
-function GoogleSubmit({ label }: { label: string }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" variant="outline" size="lg" className="w-full" disabled={pending}>
-      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleMark />}
-      {pending ? "Redirecting…" : label}
-    </Button>
-  );
-}
-
+/**
+ * OAuth is started from the browser so the PKCE code verifier is written by
+ * the same client that /auth/callback later reads it back from.
+ */
 export function GoogleButton({
   next,
   label = "Continue with Google",
@@ -46,11 +39,48 @@ export function GoogleButton({
   next?: string;
   label?: string;
 }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = async () => {
+    setPending(true);
+    setError(null);
+
+    const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    const supabase = createClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(target)}`,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+
+    if (oauthError) {
+      setError("Couldn't reach Google. Please try again.");
+      setPending(false);
+    }
+  };
+
   return (
-    <form action={signInWithGoogle}>
-      {next && <input type="hidden" name="next" value={next} />}
-      <GoogleSubmit label={label} />
-    </form>
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        className="w-full"
+        onClick={start}
+        disabled={pending}
+      >
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleMark />}
+        {pending ? "Redirecting…" : label}
+      </Button>
+      {error && (
+        <p className="text-xs font-medium text-rose-300" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

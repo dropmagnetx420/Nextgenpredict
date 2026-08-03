@@ -31,15 +31,26 @@ export const getSessionUser = cache(async (): Promise<AppUser | null> => {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
-  if (profile.role !== "admin" && bootstrap.includes(profile.email.toLowerCase())) {
-    const admin = createAdminClient();
-    const { data: promoted } = await admin
-      .from("users")
-      .update({ role: "admin" })
-      .eq("id", profile.id)
-      .select("*")
-      .maybeSingle<AppUser>();
-    if (promoted) return promoted;
+  // Fall back to the auth identity's email: an OAuth profile row can be
+  // created before the email column is populated.
+  const email = (profile.email ?? user.email ?? "").toLowerCase();
+
+  if (profile.role !== "admin" && email && bootstrap.includes(email)) {
+    // A failure here must not break session loading, so it is logged and
+    // swallowed rather than thrown.
+    try {
+      const admin = createAdminClient();
+      const { data: promoted, error } = await admin
+        .from("users")
+        .update({ role: "admin" })
+        .eq("id", profile.id)
+        .select("*")
+        .maybeSingle<AppUser>();
+      if (error) console.error("[auth] admin bootstrap failed:", error.message);
+      if (promoted) return promoted;
+    } catch (err) {
+      console.error("[auth] admin bootstrap threw:", (err as Error).message);
+    }
   }
 
   return profile;

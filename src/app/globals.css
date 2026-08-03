@@ -60,10 +60,15 @@
   }
   html {
     color-scheme: dark;
+    /* Stray horizontal overflow makes mobile browsers zoom the viewport out to
+       fit the widest element, which reads as the site forcing desktop layout. */
+    overflow-x: hidden;
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    overflow-x: hidden;
+    max-width: 100%;
   }
   h1, h2, h3, .font-display {
     font-family: var(--font-display);

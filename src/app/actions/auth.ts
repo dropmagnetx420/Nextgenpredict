@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fail, getClientIp, ok, parseForm, rateLimit } from "@/lib/action-utils";
@@ -14,6 +15,19 @@ import {
 import type { ActionResult } from "@/lib/types";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+/**
+ * Origin to send auth providers back to. Prefers the request's own host so
+ * the callback lands on whatever domain the user actually opened, falling
+ * back to the configured site URL.
+ */
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return siteUrl;
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
 
 /** Only allow same-origin relative paths as post-login redirect targets. */
 function safeNext(next: string | undefined): string {
@@ -58,7 +72,7 @@ export async function signUp(
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: `${siteUrl}/auth/callback`,
+      emailRedirectTo: `${await requestOrigin()}/auth/callback`,
       data: {
         full_name: parsed.data.full_name,
         referral_code: parsed.data.referral_code || null,
@@ -108,31 +122,6 @@ export async function signIn(
   redirect(safeNext(parsed.data.next));
 }
 
-/**
- * Starts the Google OAuth dance. Supabase returns the consent-screen URL and
- * we redirect there; the provider sends the user back to /auth/callback.
- */
-export async function signInWithGoogle(formData: FormData): Promise<void> {
-  const next = safeNext(
-    typeof formData.get("next") === "string" ? (formData.get("next") as string) : undefined
-  );
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
-      queryParams: { prompt: "select_account" },
-    },
-  });
-
-  if (error || !data.url) {
-    redirect(`/login?error=oauth_failed`);
-  }
-
-  redirect(data.url);
-}
-
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
@@ -154,7 +143,7 @@ export async function requestPasswordReset(
 
   const supabase = await createClient();
   await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
+    redirectTo: `${await requestOrigin()}/auth/callback?next=/reset-password`,
   });
 
   // Always report success so the form can't be used to enumerate accounts.
@@ -222,7 +211,7 @@ export async function resendConfirmation(
   await supabase.auth.resend({
     type: "signup",
     email: parsed.data.email,
-    options: { emailRedirectTo: `${siteUrl}/auth/callback` },
+    options: { emailRedirectTo: `${await requestOrigin()}/auth/callback` },
   });
 
   return ok(undefined, "If that account needs confirming, a new link is on its way.");

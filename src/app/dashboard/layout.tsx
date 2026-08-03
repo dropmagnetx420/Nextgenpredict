@@ -19,6 +19,9 @@ export default async function DashboardLayout({
     { href: "/dashboard/referrals", label: "Referrals" },
     { href: "/dashboard/notifications", label: "Notifications", badge: unread },
     { href: "/dashboard/settings", label: "Settings" },
+    // Only admins ever receive this item, so regular users see no trace of
+    // the panel anywhere in the UI.
+    ...(user.role === "admin" ? [{ href: "/admin", label: "Admin panel" }] : []),
   ];
 
   return (
@@ -26,6 +29,7 @@ export default async function DashboardLayout({
       user={user}
       unread={unread}
       navItems={navItems}
+      area="dashboard"
       footerHref="/markets"
       footerLabel="Browse markets"
     >

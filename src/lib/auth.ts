@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { AppUser, Wallet } from "@/lib/types";
@@ -67,9 +67,15 @@ export async function requireUser(returnTo?: string): Promise<AppUser> {
   return user;
 }
 
+/**
+ * Admin gate. Non-admins get a 404 rather than a redirect so the panel's
+ * existence is not discoverable by probing the URL.
+ */
 export async function requireAdmin(): Promise<AppUser> {
-  const user = await requireUser("/admin");
-  if (user.role !== "admin") redirect("/dashboard");
+  const user = await getSessionUser();
+  if (!user || user.role !== "admin") notFound();
+  if (user.status === "banned") redirect("/suspended?reason=banned");
+  if (user.status === "suspended") redirect("/suspended?reason=suspended");
   return user;
 }
 

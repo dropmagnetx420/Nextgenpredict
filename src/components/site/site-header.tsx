@@ -39,9 +39,7 @@ export async function SiteHeader() {
         <div className="ml-auto flex items-center gap-2">
           {user ? (
             <Button asChild size="sm">
-              <Link href={user.role === "admin" ? "/admin" : "/dashboard"}>
-                Dashboard
-              </Link>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           ) : (
             <>

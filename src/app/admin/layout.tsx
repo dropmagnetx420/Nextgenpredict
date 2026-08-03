@@ -22,6 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       user={user}
       unread={unread}
       navItems={navItems}
+      area="admin"
       footerHref="/dashboard"
       footerLabel="Back to app"
     >

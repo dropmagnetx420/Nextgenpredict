@@ -11,6 +11,7 @@ export function DashboardShell({
   navItems,
   footerHref,
   footerLabel,
+  area,
   children,
 }: {
   user: AppUser;
@@ -18,11 +19,12 @@ export function DashboardShell({
   navItems: NavItem[];
   footerHref: string;
   footerLabel: string;
+  area: "dashboard" | "admin";
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-dvh">
-      <DashboardTopbar user={user} unread={unread} navItems={navItems} />
+      <DashboardTopbar user={user} unread={unread} navItems={navItems} area={area} />
 
       <div className="mx-auto flex w-full max-w-7xl gap-8 px-4 py-8 sm:px-6">
         <aside className="hidden w-60 shrink-0 lg:block">

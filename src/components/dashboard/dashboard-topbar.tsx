@@ -13,12 +13,16 @@ export function DashboardTopbar({
   user,
   unread,
   navItems,
+  area,
 }: {
   user: AppUser;
   unread: number;
   navItems: NavItem[];
+  area: "dashboard" | "admin";
 }) {
-  const isAdmin = user.role === "admin";
+  // Driven by the current area rather than the user's role, so an admin
+  // browsing their own dashboard sees ordinary user chrome.
+  const isAdmin = area === "admin";
   const home = isAdmin ? "/admin" : "/dashboard";
 
   return (

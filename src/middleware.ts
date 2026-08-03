@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
+// `/admin` is deliberately absent: the admin layout answers 404 for anyone
+// who is not an admin, so probing the URL reveals nothing about the panel.
+const PROTECTED_PREFIXES = ["/dashboard"];
 const AUTH_ROUTES = ["/login", "/signup", "/forgot-password"];
 
 export async function middleware(request: NextRequest) {

@@ -26,14 +26,17 @@ alter table public.partners          enable row level security;
 alter table public.rate_limits       enable row level security;
 
 -- ------------------------- USERS ---------------------------
+drop policy if exists users_select_self on public.users;
 create policy users_select_self on public.users
   for select using (id = auth.uid() or public.is_admin());
 
 -- Profile fields only. Role/status/balances are protected by the
 -- guard trigger below, which rejects privileged column changes.
+drop policy if exists users_update_self on public.users;
 create policy users_update_self on public.users
   for update using (id = auth.uid()) with check (id = auth.uid());
 
+drop policy if exists users_admin_all on public.users;
 create policy users_admin_all on public.users
   for all using (public.is_admin()) with check (public.is_admin());
 
@@ -60,72 +63,90 @@ begin
 end;
 $$;
 
+drop trigger if exists users_guard_columns on public.users;
 create trigger users_guard_columns
   before update on public.users
   for each row execute function public.guard_user_columns();
 
 -- ------------------------ WALLETS --------------------------
 -- Read-only to the owner. Writes happen exclusively via apply_balance().
+drop policy if exists wallets_select_self on public.wallets;
 create policy wallets_select_self on public.wallets
   for select using (user_id = auth.uid() or public.is_admin());
 
 -- ------------------------ MARKETS --------------------------
+drop policy if exists markets_select_public on public.markets;
 create policy markets_select_public on public.markets
   for select using (status <> 'draft' or public.is_admin());
 
+drop policy if exists markets_admin_write on public.markets;
 create policy markets_admin_write on public.markets
   for all using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists market_options_select_public on public.market_options;
 create policy market_options_select_public on public.market_options
   for select using (
     exists (select 1 from public.markets m
             where m.id = market_id and (m.status <> 'draft' or public.is_admin()))
   );
 
+drop policy if exists market_options_admin_write on public.market_options;
 create policy market_options_admin_write on public.market_options
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ------------------------- TRADES --------------------------
 -- Inserts/updates are rejected: place_trade()/cancel_trade() only.
+drop policy if exists trades_select_self on public.trades;
 create policy trades_select_self on public.trades
   for select using (user_id = auth.uid() or public.is_admin());
 
+drop policy if exists trades_admin_write on public.trades;
 create policy trades_admin_write on public.trades
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------- TRANSACTIONS -----------------------
+drop policy if exists transactions_select_self on public.transactions;
 create policy transactions_select_self on public.transactions
   for select using (user_id = auth.uid() or public.is_admin());
 
 -- -------------------- DEPOSIT REQUESTS ---------------------
+drop policy if exists deposits_select_self on public.deposit_requests;
 create policy deposits_select_self on public.deposit_requests
   for select using (user_id = auth.uid() or public.is_admin());
 
+drop policy if exists deposits_admin_write on public.deposit_requests;
 create policy deposits_admin_write on public.deposit_requests
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ------------------- WITHDRAW REQUESTS ---------------------
+drop policy if exists withdrawals_select_self on public.withdraw_requests;
 create policy withdrawals_select_self on public.withdraw_requests
   for select using (user_id = auth.uid() or public.is_admin());
 
+drop policy if exists withdrawals_admin_write on public.withdraw_requests;
 create policy withdrawals_admin_write on public.withdraw_requests
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ----------------------- KYC REQUESTS ----------------------
+drop policy if exists kyc_select_self on public.kyc_requests;
 create policy kyc_select_self on public.kyc_requests
   for select using (user_id = auth.uid() or public.is_admin());
 
+drop policy if exists kyc_admin_write on public.kyc_requests;
 create policy kyc_admin_write on public.kyc_requests
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------- NOTIFICATIONS ----------------------
+drop policy if exists notifications_select_self on public.notifications;
 create policy notifications_select_self on public.notifications
   for select using (user_id = auth.uid() or user_id is null or public.is_admin());
 
 -- Owner may only flip is_read; enforced by the guard trigger.
+drop policy if exists notifications_update_self on public.notifications;
 create policy notifications_update_self on public.notifications
   for update using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists notifications_admin_write on public.notifications;
 create policy notifications_admin_write on public.notifications
   for all using (public.is_admin()) with check (public.is_admin());
 
@@ -144,44 +165,54 @@ begin
 end;
 $$;
 
+drop trigger if exists notifications_guard_columns on public.notifications;
 create trigger notifications_guard_columns
   before update on public.notifications
   for each row execute function public.guard_notification_columns();
 
 -- ---------------------- BONUS HISTORY ----------------------
+drop policy if exists bonus_select_self on public.bonus_history;
 create policy bonus_select_self on public.bonus_history
   for select using (user_id = auth.uid() or public.is_admin());
 
+drop policy if exists bonus_admin_write on public.bonus_history;
 create policy bonus_admin_write on public.bonus_history
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ------------------------ REFERRALS ------------------------
+drop policy if exists referrals_select_self on public.referrals;
 create policy referrals_select_self on public.referrals
   for select using (referrer_id = auth.uid() or referred_id = auth.uid() or public.is_admin());
 
+drop policy if exists referrals_admin_write on public.referrals;
 create policy referrals_admin_write on public.referrals
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ------------------------ ADMIN LOGS -----------------------
+drop policy if exists admin_logs_admin_only on public.admin_logs;
 create policy admin_logs_admin_only on public.admin_logs
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------- SITE SETTINGS ----------------------
 -- Public settings are readable by anyone (branding, socials, limits).
 -- Keys prefixed with `private.` are admin-only.
+drop policy if exists settings_select_public on public.site_settings;
 create policy settings_select_public on public.site_settings
   for select using (key not like 'private.%' or public.is_admin());
 
+drop policy if exists settings_admin_write on public.site_settings;
 create policy settings_admin_write on public.site_settings
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- -------------------- DEPOSIT ADDRESSES --------------------
 -- Users never list addresses directly; they receive one via
 -- random_deposit_address(). Only admins can read the full set.
+drop policy if exists deposit_addresses_admin on public.deposit_addresses;
 create policy deposit_addresses_admin on public.deposit_addresses
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ---------------------- PROMO BANNERS ----------------------
+drop policy if exists banners_select_active on public.promo_banners;
 create policy banners_select_active on public.promo_banners
   for select using (
     public.is_admin() or (
@@ -192,13 +223,16 @@ create policy banners_select_active on public.promo_banners
     )
   );
 
+drop policy if exists banners_admin_write on public.promo_banners;
 create policy banners_admin_write on public.promo_banners
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ------------------------ PARTNERS -------------------------
+drop policy if exists partners_select_active on public.partners;
 create policy partners_select_active on public.partners
   for select using (is_active or public.is_admin());
 
+drop policy if exists partners_admin_write on public.partners;
 create policy partners_admin_write on public.partners
   for all using (public.is_admin()) with check (public.is_admin());
 

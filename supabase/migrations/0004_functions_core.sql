@@ -176,7 +176,9 @@ returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end;
 $$;
 
+drop trigger if exists users_touch on public.users;
 create trigger users_touch   before update on public.users   for each row execute function public.touch_updated_at();
+drop trigger if exists markets_touch on public.markets;
 create trigger markets_touch before update on public.markets for each row execute function public.touch_updated_at();
 
 -- Provisions a public.users row + wallet whenever auth.users gains a row.
@@ -233,6 +235,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();

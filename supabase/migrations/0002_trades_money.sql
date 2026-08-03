@@ -5,7 +5,7 @@
 -- ------------------------- TRADES --------------------------
 -- A prediction position. `stake` is split across main/bonus wallet
 -- so cancellations refund each source exactly.
-create table public.trades (
+create table if not exists public.trades (
   id               uuid primary key default gen_random_uuid(),
   user_id          uuid not null references public.users(id) on delete cascade,
   market_id        uuid not null references public.markets(id) on delete cascade,
@@ -28,14 +28,14 @@ create table public.trades (
   constraint trades_stake_split check (stake_from_main + stake_from_bonus = stake)
 );
 
-create index trades_user_id_idx       on public.trades (user_id, created_at desc);
-create index trades_market_id_idx     on public.trades (market_id);
-create index trades_status_idx        on public.trades (status);
-create index trades_open_by_market_idx on public.trades (market_id, status) where status = 'open';
+create index if not exists trades_user_id_idx       on public.trades (user_id, created_at desc);
+create index if not exists trades_market_id_idx     on public.trades (market_id);
+create index if not exists trades_status_idx        on public.trades (status);
+create index if not exists trades_open_by_market_idx on public.trades (market_id, status) where status = 'open';
 
 -- ----------------------- TRANSACTIONS ----------------------
 -- Immutable ledger. Every balance change writes exactly one row.
-create table public.transactions (
+create table if not exists public.transactions (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.users(id) on delete cascade,
   type            tx_type not null,
@@ -49,13 +49,13 @@ create table public.transactions (
   created_at      timestamptz not null default now()
 );
 
-create index transactions_user_id_idx   on public.transactions (user_id, created_at desc);
-create index transactions_type_idx      on public.transactions (type);
-create index transactions_reference_idx on public.transactions (reference_id);
-create index transactions_created_idx   on public.transactions (created_at desc);
+create index if not exists transactions_user_id_idx   on public.transactions (user_id, created_at desc);
+create index if not exists transactions_type_idx      on public.transactions (type);
+create index if not exists transactions_reference_idx on public.transactions (reference_id);
+create index if not exists transactions_created_idx   on public.transactions (created_at desc);
 
 -- --------------------- DEPOSIT REQUESTS --------------------
-create table public.deposit_requests (
+create table if not exists public.deposit_requests (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references public.users(id) on delete cascade,
   amount         numeric(20,6) not null check (amount > 0),
@@ -79,11 +79,11 @@ create table public.deposit_requests (
   constraint deposit_tx_hash_unique unique (network, tx_hash)
 );
 
-create index deposit_requests_user_idx   on public.deposit_requests (user_id, created_at desc);
-create index deposit_requests_status_idx on public.deposit_requests (status, created_at desc);
+create index if not exists deposit_requests_user_idx   on public.deposit_requests (user_id, created_at desc);
+create index if not exists deposit_requests_status_idx on public.deposit_requests (status, created_at desc);
 
 -- -------------------- WITHDRAW REQUESTS --------------------
-create table public.withdraw_requests (
+create table if not exists public.withdraw_requests (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references public.users(id) on delete cascade,
   amount        numeric(20,6) not null check (amount > 0),
@@ -104,11 +104,11 @@ create table public.withdraw_requests (
   )
 );
 
-create index withdraw_requests_user_idx   on public.withdraw_requests (user_id, created_at desc);
-create index withdraw_requests_status_idx on public.withdraw_requests (status, created_at desc);
+create index if not exists withdraw_requests_user_idx   on public.withdraw_requests (user_id, created_at desc);
+create index if not exists withdraw_requests_status_idx on public.withdraw_requests (status, created_at desc);
 
 -- ------------------------ KYC REQUESTS ---------------------
-create table public.kyc_requests (
+create table if not exists public.kyc_requests (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references public.users(id) on delete cascade,
   doc_type       kyc_doc_type not null,
@@ -126,14 +126,14 @@ create table public.kyc_requests (
   created_at     timestamptz not null default now()
 );
 
-create index kyc_requests_user_idx   on public.kyc_requests (user_id, created_at desc);
-create index kyc_requests_status_idx on public.kyc_requests (status, created_at desc);
+create index if not exists kyc_requests_user_idx   on public.kyc_requests (user_id, created_at desc);
+create index if not exists kyc_requests_status_idx on public.kyc_requests (status, created_at desc);
 -- Only one in-flight KYC application per user.
-create unique index kyc_one_pending_per_user
+create unique index if not exists kyc_one_pending_per_user
   on public.kyc_requests (user_id) where status = 'pending';
 
 -- ----------------------- NOTIFICATIONS ---------------------
-create table public.notifications (
+create table if not exists public.notifications (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references public.users(id) on delete cascade, -- null = broadcast
   type       notification_type not null,
@@ -145,12 +145,12 @@ create table public.notifications (
   created_at timestamptz not null default now()
 );
 
-create index notifications_user_idx    on public.notifications (user_id, created_at desc);
-create index notifications_unread_idx  on public.notifications (user_id, is_read) where not is_read;
-create index notifications_broadcast_idx on public.notifications (created_at desc) where user_id is null;
+create index if not exists notifications_user_idx    on public.notifications (user_id, created_at desc);
+create index if not exists notifications_unread_idx  on public.notifications (user_id, is_read) where not is_read;
+create index if not exists notifications_broadcast_idx on public.notifications (created_at desc) where user_id is null;
 
 -- ----------------------- BONUS HISTORY ---------------------
-create table public.bonus_history (
+create table if not exists public.bonus_history (
   id                uuid primary key default gen_random_uuid(),
   user_id           uuid not null references public.users(id) on delete cascade,
   kind              text not null,  -- welcome | deposit | promo | referral | manual
@@ -164,11 +164,11 @@ create table public.bonus_history (
   created_at        timestamptz not null default now()
 );
 
-create index bonus_history_user_idx   on public.bonus_history (user_id, created_at desc);
-create index bonus_history_active_idx on public.bonus_history (user_id) where not is_cleared;
+create index if not exists bonus_history_user_idx   on public.bonus_history (user_id, created_at desc);
+create index if not exists bonus_history_active_idx on public.bonus_history (user_id) where not is_cleared;
 
 -- ------------------------ REFERRALS ------------------------
-create table public.referrals (
+create table if not exists public.referrals (
   id                uuid primary key default gen_random_uuid(),
   referrer_id       uuid not null references public.users(id) on delete cascade,
   referred_id       uuid not null unique references public.users(id) on delete cascade,
@@ -180,4 +180,4 @@ create table public.referrals (
   constraint referrals_no_self check (referrer_id <> referred_id)
 );
 
-create index referrals_referrer_idx on public.referrals (referrer_id, created_at desc);
+create index if not exists referrals_referrer_idx on public.referrals (referrer_id, created_at desc);

@@ -4,7 +4,7 @@
 
 -- ----------------------- SITE SETTINGS ---------------------
 -- Single-row-per-key settings consumed by server components.
-create table public.site_settings (
+create table if not exists public.site_settings (
   key        text primary key,
   value      jsonb not null,
   updated_by uuid references public.users(id) on delete set null,
@@ -14,7 +14,7 @@ create table public.site_settings (
 -- --------------------- DEPOSIT ADDRESSES -------------------
 -- Admin seeds 10–15 wallet addresses per network+asset. Each user's
 -- deposit page shows a random one (rotate_deposit_address()).
-create table public.deposit_addresses (
+create table if not exists public.deposit_addresses (
   id          uuid primary key default gen_random_uuid(),
   network     chain_network not null,
   asset       asset_symbol not null,
@@ -25,13 +25,13 @@ create table public.deposit_addresses (
   created_at  timestamptz not null default now()
 );
 
-create index deposit_addresses_active_idx
+create index if not exists deposit_addresses_active_idx
   on public.deposit_addresses (network, asset) where is_active;
 
 -- ---------------------- PROMO BANNERS ----------------------
 -- Multiple simultaneously. `limit_reached` is managed automatically
 -- when a promo bonus offer is attached (joining-user cap).
-create table public.promo_banners (
+create table if not exists public.promo_banners (
   id            uuid primary key default gen_random_uuid(),
   title         text not null,
   subtitle      text,
@@ -51,7 +51,7 @@ create table public.promo_banners (
 
 -- ------------------------ PARTNERS -------------------------
 -- Sponsor / partner logos shown in the footer (set from admin).
-create table public.partners (
+create table if not exists public.partners (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   logo_url   text,
@@ -62,7 +62,7 @@ create table public.partners (
 );
 
 -- ----------------------- ADMIN LOGS ------------------------
-create table public.admin_logs (
+create table if not exists public.admin_logs (
   id          uuid primary key default gen_random_uuid(),
   admin_id    uuid references public.users(id) on delete set null,
   action      text not null,
@@ -73,12 +73,12 @@ create table public.admin_logs (
   created_at  timestamptz not null default now()
 );
 
-create index admin_logs_admin_idx  on public.admin_logs (admin_id, created_at desc);
-create index admin_logs_action_idx on public.admin_logs (action);
+create index if not exists admin_logs_admin_idx  on public.admin_logs (admin_id, created_at desc);
+create index if not exists admin_logs_action_idx on public.admin_logs (action);
 
 -- ----------------------- RATE LIMITS -----------------------
 -- Lightweight sliding-window limiter for auth & trade endpoints.
-create table public.rate_limits (
+create table if not exists public.rate_limits (
   key        text primary key,
   count      integer not null default 0,
   reset_at   timestamptz not null default now()

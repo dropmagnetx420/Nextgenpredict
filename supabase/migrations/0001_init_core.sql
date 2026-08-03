@@ -6,32 +6,77 @@ create extension if not exists "pgcrypto";
 create extension if not exists "citext";
 
 -- ------------------------- ENUMS ---------------------------
-create type user_role       as enum ('user', 'admin');
-create type user_status     as enum ('active', 'suspended', 'banned');
-create type kyc_status      as enum ('none', 'pending', 'approved', 'rejected');
-create type kyc_doc_type    as enum ('national_id', 'passport', 'driving_license');
-create type sport_type      as enum ('football', 'cricket', 'basketball', 'tennis', 'esports');
-create type market_status   as enum ('draft', 'open', 'closed', 'resolved', 'cancelled');
-create type market_outcome  as enum ('yes', 'no', 'invalid');
-create type trade_side      as enum ('yes', 'no');
-create type trade_status    as enum ('open', 'cancelled', 'won', 'lost', 'refunded');
-create type request_status  as enum ('pending', 'approved', 'rejected');
-create type chain_network   as enum ('robinhood', 'ethereum');
-create type asset_symbol    as enum ('ETH', 'USDG', 'USDC', 'USDT');
-create type wallet_kind     as enum ('main', 'bonus');
-create type tx_type as enum (
-  'deposit', 'withdrawal', 'trade_open', 'trade_cancel', 'trade_payout',
-  'trade_refund', 'fee', 'bonus', 'referral_commission', 'admin_adjustment'
-);
-create type notification_type as enum (
-  'deposit_approved', 'deposit_rejected', 'withdrawal_approved', 'withdrawal_rejected',
-  'prediction_won', 'prediction_lost', 'prediction_refunded', 'kyc_approved',
-  'kyc_rejected', 'bonus_credited', 'referral_earning', 'announcement'
-);
+do $$ begin
+  create type user_role       as enum ('user', 'admin');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type user_status     as enum ('active', 'suspended', 'banned');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type kyc_status      as enum ('none', 'pending', 'approved', 'rejected');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type kyc_doc_type    as enum ('national_id', 'passport', 'driving_license');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type sport_type      as enum ('football', 'cricket', 'basketball', 'tennis', 'esports');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type market_status   as enum ('draft', 'open', 'closed', 'resolved', 'cancelled');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type market_outcome  as enum ('yes', 'no', 'invalid');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type trade_side      as enum ('yes', 'no');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type trade_status    as enum ('open', 'cancelled', 'won', 'lost', 'refunded');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type request_status  as enum ('pending', 'approved', 'rejected');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type chain_network   as enum ('robinhood', 'ethereum');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type asset_symbol    as enum ('ETH', 'USDG', 'USDC', 'USDT');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type wallet_kind     as enum ('main', 'bonus');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type tx_type as enum (
+    'deposit', 'withdrawal', 'trade_open', 'trade_cancel', 'trade_payout',
+    'trade_refund', 'fee', 'bonus', 'referral_commission', 'admin_adjustment'
+  );
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type notification_type as enum (
+    'deposit_approved', 'deposit_rejected', 'withdrawal_approved', 'withdrawal_rejected',
+    'prediction_won', 'prediction_lost', 'prediction_refunded', 'kyc_approved',
+    'kyc_rejected', 'bonus_credited', 'referral_earning', 'announcement'
+  );
+exception when duplicate_object then null;
+end $$;
 
 -- ------------------------- USERS ---------------------------
 -- Mirrors auth.users. Populated by a trigger on signup.
-create table public.users (
+create table if not exists public.users (
   id             uuid primary key references auth.users(id) on delete cascade,
   email          citext not null unique,
   full_name      text,
@@ -59,14 +104,14 @@ create table public.users (
   constraint users_username_len check (username is null or char_length(username) between 3 and 24)
 );
 
-create index users_referral_code_idx on public.users (referral_code);
-create index users_referred_by_idx   on public.users (referred_by);
-create index users_role_idx          on public.users (role) where role = 'admin';
-create index users_created_at_idx    on public.users (created_at desc);
+create index if not exists users_referral_code_idx on public.users (referral_code);
+create index if not exists users_referred_by_idx   on public.users (referred_by);
+create index if not exists users_role_idx          on public.users (role) where role = 'admin';
+create index if not exists users_created_at_idx    on public.users (created_at desc);
 
 -- ------------------------ WALLETS --------------------------
 -- One row per user. Balances are in USD-equivalent units.
-create table public.wallets (
+create table if not exists public.wallets (
   id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null unique references public.users(id) on delete cascade,
   available       numeric(20,6) not null default 0 check (available >= 0),
@@ -77,10 +122,10 @@ create table public.wallets (
   updated_at      timestamptz not null default now()
 );
 
-create index wallets_user_id_idx on public.wallets (user_id);
+create index if not exists wallets_user_id_idx on public.wallets (user_id);
 
 -- ------------------------ MARKETS --------------------------
-create table public.markets (
+create table if not exists public.markets (
   id            uuid primary key default gen_random_uuid(),
   slug          text not null unique,
   sport         sport_type not null,
@@ -117,15 +162,15 @@ create table public.markets (
   constraint markets_trade_range check (max_trade >= min_trade)
 );
 
-create index markets_status_idx     on public.markets (status);
-create index markets_sport_idx      on public.markets (sport);
-create index markets_end_time_idx   on public.markets (end_time);
-create index markets_trending_idx   on public.markets (is_trending) where is_trending;
-create index markets_featured_idx   on public.markets (is_featured) where is_featured;
-create index markets_open_list_idx  on public.markets (status, end_time desc) where status = 'open';
+create index if not exists markets_status_idx     on public.markets (status);
+create index if not exists markets_sport_idx      on public.markets (sport);
+create index if not exists markets_end_time_idx   on public.markets (end_time);
+create index if not exists markets_trending_idx   on public.markets (is_trending) where is_trending;
+create index if not exists markets_featured_idx   on public.markets (is_featured) where is_featured;
+create index if not exists markets_open_list_idx  on public.markets (status, end_time desc) where status = 'open';
 
 -- Optional richer outcome set (multi-option markets / future proofing)
-create table public.market_options (
+create table if not exists public.market_options (
   id          uuid primary key default gen_random_uuid(),
   market_id   uuid not null references public.markets(id) on delete cascade,
   label       text not null,
@@ -138,4 +183,4 @@ create table public.market_options (
   unique (market_id, side)
 );
 
-create index market_options_market_id_idx on public.market_options (market_id);
+create index if not exists market_options_market_id_idx on public.market_options (market_id);

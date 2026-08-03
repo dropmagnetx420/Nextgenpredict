@@ -16,30 +16,8 @@ values
    array['image/jpeg','image/png','image/webp','image/svg+xml','image/gif'])
 on conflict (id) do nothing;
 
--- Users may upload/read/replace only inside their own uid-prefixed folder.
-create policy kyc_owner_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'kyc-documents' and (storage.foldername(name))[1] = auth.uid()::text);
-
-create policy kyc_owner_select on storage.objects for select to authenticated
-  using (bucket_id = 'kyc-documents'
-         and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
-
-create policy kyc_owner_update on storage.objects for update to authenticated
-  using (bucket_id = 'kyc-documents' and (storage.foldername(name))[1] = auth.uid()::text);
-
-create policy receipts_owner_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'deposit-receipts' and (storage.foldername(name))[1] = auth.uid()::text);
-
-create policy receipts_owner_select on storage.objects for select to authenticated
-  using (bucket_id = 'deposit-receipts'
-         and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
-
-create policy public_assets_read on storage.objects for select
-  using (bucket_id = 'public-assets');
-
-create policy public_assets_admin_write on storage.objects for all to authenticated
-  using (bucket_id = 'public-assets' and public.is_admin())
-  with check (bucket_id = 'public-assets' and public.is_admin());
+-- Storage RLS policies live in 0010. They need table-owner rights on
+-- storage.objects, which the SQL Editor role may not hold.
 
 -- -------------------- DEFAULT SETTINGS ---------------------
 insert into public.site_settings (key, value) values
@@ -98,22 +76,26 @@ insert into public.deposit_addresses (network, asset, address, label) values
 on conflict (address) do nothing;
 
 -- ------------------- SAMPLE PROMO BANNERS ------------------
+-- No unique key on title, so guard on emptiness to stay re-runnable.
 insert into public.promo_banners
   (title, subtitle, cta_label, cta_link, promo_bonus_percent, promo_bonus_cap,
    max_joiners, sort_order)
-values
+select * from (values
   ('Launch Week: 100% Deposit Bonus',
    'Double your first deposit up to 250 USDG. Limited to the first 500 traders.',
    'Claim bonus', '/dashboard/deposit', 100, 250, 500, 1),
   ('Refer & Earn 10% Forever',
    'Earn commission on every trade your invitees make. No cap.',
    'Get your link', '/dashboard/referrals', null, null, null, 2)
-on conflict do nothing;
+) as v
+where not exists (select 1 from public.promo_banners);
 
 -- ---------------------- SAMPLE PARTNERS --------------------
-insert into public.partners (name, website, sort_order) values
+insert into public.partners (name, website, sort_order)
+select * from (values
   ('ChainGuard Custody', 'https://example.com', 1),
   ('Oracle Feeds',       'https://example.com', 2),
   ('SportsData IO',      'https://example.com', 3),
   ('Robinhood Chain',    'https://example.com', 4)
-on conflict do nothing;
+) as v
+where not exists (select 1 from public.partners);

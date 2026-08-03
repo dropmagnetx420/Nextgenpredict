@@ -1,0 +1,85 @@
+import "server-only";
+import { cache } from "react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { AppUser, Wallet } from "@/lib/types";
+
+/**
+ * Current session user joined with their profile row.
+ * `cache` dedupes this across a single render pass.
+ */
+export const getSessionUser = cache(async (): Promise<AppUser | null> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle<AppUser>();
+
+  if (!profile) return null;
+
+  // Promote bootstrap admins listed in ADMIN_BOOTSTRAP_EMAILS. Runs once per
+  // account; afterwards roles are managed from the admin panel.
+  const bootstrap = (process.env.ADMIN_BOOTSTRAP_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (profile.role !== "admin" && bootstrap.includes(profile.email.toLowerCase())) {
+    const admin = createAdminClient();
+    const { data: promoted } = await admin
+      .from("users")
+      .update({ role: "admin" })
+      .eq("id", profile.id)
+      .select("*")
+      .maybeSingle<AppUser>();
+    if (promoted) return promoted;
+  }
+
+  return profile;
+});
+
+export const getWallet = cache(async (userId: string): Promise<Wallet | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("wallets")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle<Wallet>();
+  return data;
+});
+
+/** Redirects unauthenticated visitors to login, preserving the target path. */
+export async function requireUser(returnTo?: string): Promise<AppUser> {
+  const user = await getSessionUser();
+  if (!user) {
+    const next = returnTo ? `?next=${encodeURIComponent(returnTo)}` : "";
+    redirect(`/login${next}`);
+  }
+  if (user.status === "banned") redirect("/suspended?reason=banned");
+  if (user.status === "suspended") redirect("/suspended?reason=suspended");
+  return user;
+}
+
+export async function requireAdmin(): Promise<AppUser> {
+  const user = await requireUser("/admin");
+  if (user.role !== "admin") redirect("/dashboard");
+  return user;
+}
+
+/** Unread notification count for the topbar bell. */
+export async function getUnreadCount(userId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("is_read", false);
+  return count ?? 0;
+}

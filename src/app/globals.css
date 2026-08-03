@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+
+  --color-background: #060816;
+  --color-foreground: #f2f5ff;
+  --color-surface: #0b0f24;
+  --color-surface-2: #111735;
+  --color-primary: #7c5cff;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #00d4ff;
+  --color-accent: #00ffb3;
+  --color-accent-2: #ff6ec7;
+  --color-muted: #8b93b8;
+  --color-border: #1d2447;
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow-pulse: glowPulse 3s ease-in-out infinite;
+  --animate-grid-pan: gridPan 24s linear infinite;
+  --animate-marquee: marquee 30s linear infinite;
+  --animate-orbit: orbit 14s linear infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-14px) }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; filter: blur(40px); }
+  50% { opacity: 1; filter: blur(56px); }
+}
+
+@keyframes gridPan {
+  from { background-position: 0 0 }
+  to { background-position: 64px 64px }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0) }
+  to { transform: translateX(-50%) }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) }
+  to { transform: rotate(360deg) }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0 }
+  to { background-position: 200% 0 }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: #070a1a; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(#7c5cff, #00d4ff);
+    border-radius: 9999px;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-xl border border-white/10;
+  }
+  .glass-strong {
+    @apply bg-surface/70 backdrop-blur-2xl border border-white/10;
+  }
+  .text-gradient {
+    background: linear-gradient(92deg, #7c5cff 0%, #00d4ff 50%, #00ffb3 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(124, 92, 255, 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124, 92, 255, 0.07) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .shimmer-text {
+    background: linear-gradient(110deg, #8b93b8 35%, #ffffff 50%, #8b93b8 65%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 2.4s linear infinite;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}

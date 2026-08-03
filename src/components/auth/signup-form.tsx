@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/misc";
 import { Field, FormBanner, SubmitButton } from "@/components/ui/form";
+import { AuthDivider, GoogleButton } from "@/components/auth/google-button";
 import { signUp } from "@/app/actions/auth";
 import { fmtMoney } from "@/lib/utils";
 import type { ActionResult } from "@/lib/types";
@@ -59,7 +60,12 @@ export function SignupForm({
             : "Takes less than a minute."}
         </p>
 
-        <form action={action} className="mt-6 space-y-4">
+        <div className="mt-6">
+          <GoogleButton label="Sign up with Google" />
+        </div>
+        <AuthDivider />
+
+        <form action={action} className="space-y-4">
           {state && !state.ok && <FormBanner>{state.error}</FormBanner>}
 
           <Field label="Full name" htmlFor="full_name" errors={errors?.full_name}>

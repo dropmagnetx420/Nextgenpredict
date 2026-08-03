@@ -16,5 +16,11 @@ export default async function LoginPage({
   const next =
     params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : undefined;
 
-  return <LoginForm next={next} linkExpired={params.error === "link_expired"} />;
+  return (
+    <LoginForm
+      next={next}
+      linkExpired={params.error === "link_expired"}
+      oauthFailed={params.error === "oauth_failed"}
+    />
+  );
 }

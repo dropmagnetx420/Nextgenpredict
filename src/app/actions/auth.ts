@@ -108,6 +108,31 @@ export async function signIn(
   redirect(safeNext(parsed.data.next));
 }
 
+/**
+ * Starts the Google OAuth dance. Supabase returns the consent-screen URL and
+ * we redirect there; the provider sends the user back to /auth/callback.
+ */
+export async function signInWithGoogle(formData: FormData): Promise<void> {
+  const next = safeNext(
+    typeof formData.get("next") === "string" ? (formData.get("next") as string) : undefined
+  );
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+
+  if (error || !data.url) {
+    redirect(`/login?error=oauth_failed`);
+  }
+
+  redirect(data.url);
+}
+
 export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();

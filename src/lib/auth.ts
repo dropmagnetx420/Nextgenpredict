@@ -31,11 +31,7 @@ export const getSessionUser = cache(async (): Promise<AppUser | null> => {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 
-  // Fall back to the auth identity's email: an OAuth profile row can be
-  // created before the email column is populated.
-  const email = (profile.email ?? user.email ?? "").toLowerCase();
-
-  if (profile.role !== "admin" && email && bootstrap.includes(email)) {
+  if (profile.role !== "admin" && bootstrap.includes(profile.email.toLowerCase())) {
     // A failure here must not break session loading, so it is logged and
     // swallowed rather than thrown.
     try {

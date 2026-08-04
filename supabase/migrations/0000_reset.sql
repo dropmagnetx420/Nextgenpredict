@@ -9,7 +9,7 @@
 -- their profile/wallet rows are removed, so delete them from
 -- Authentication → Users afterwards if you want a truly clean slate.
 --
--- After this completes, run 0001 through 0012 in order.
+-- After this completes, run 0001 through 0013 in order.
 -- ============================================================
 
 -- Trigger on auth.users must go first; it depends on handle_new_user().
@@ -52,6 +52,7 @@ drop function if exists public.create_withdraw_request   cascade;
 drop function if exists public.credit_turnover           cascade;
 drop function if exists public.derive_yes_price          cascade;
 drop function if exists public.gen_referral_code         cascade;
+drop function if exists public.ensure_user_profile       cascade;
 drop function if exists public.grant_bonus               cascade;
 drop function if exists public.guard_market_open         cascade;
 drop function if exists public.guard_notification_columns cascade;

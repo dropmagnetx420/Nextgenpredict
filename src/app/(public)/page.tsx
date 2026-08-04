@@ -33,9 +33,11 @@ const FEATURES = [
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const settings = await getSettings();
 
-  const [featuredRes, trendingRes, promosRes, partnersRes] = await Promise.all([
+  // Settings don't depend on the market queries, so they ride along rather
+  // than adding a round trip in front of them.
+  const [settings, featuredRes, trendingRes, promosRes, partnersRes] = await Promise.all([
+    getSettings(),
     supabase
       .from("markets")
       .select("*")

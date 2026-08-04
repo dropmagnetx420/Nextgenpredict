@@ -34,19 +34,26 @@ export function BlockchainBackground() {
     let nodes: Node[] = [];
     let raf = 0;
     let running = true;
+    let lastFrame = 0;
 
     const LINK_DISTANCE = 150;
+    const LINK_DISTANCE_SQ = LINK_DISTANCE * LINK_DISTANCE;
+    // Link drawing is O(n²), so the node budget is what actually decides
+    // whether this animation is free or eats a whole core on a phone.
+    const MAX_NODES = window.innerWidth < 768 ? 28 : 52;
+    const FRAME_MS = 1000 / 30;
 
     function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Above 1.5 the extra pixels are invisible on a blurred backdrop but
+      // cost a fill-rate multiple on high-DPI phones.
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       width = canvas!.clientWidth;
       height = canvas!.clientHeight;
       canvas!.width = Math.floor(width * dpr);
       canvas!.height = Math.floor(height * dpr);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Scale node count with viewport area, capped for low-end mobile.
-      const target = Math.min(70, Math.max(22, Math.floor((width * height) / 24000)));
+      const target = Math.min(MAX_NODES, Math.max(16, Math.floor((width * height) / 32000)));
       nodes = Array.from({ length: target }, () => ({
         x: Math.random() * width,
         y: Math.random() * height,
@@ -57,8 +64,15 @@ export function BlockchainBackground() {
       }));
     }
 
-    function draw() {
+    function draw(now: number) {
+      if (running) raf = requestAnimationFrame(draw);
+
+      // 60fps buys nothing on a slow ambient drift and doubles the cost.
+      if (now - lastFrame < FRAME_MS) return;
+      lastFrame = now;
+
       ctx!.clearRect(0, 0, width, height);
+      ctx!.lineWidth = 0.7;
 
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i]!;
@@ -72,35 +86,32 @@ export function BlockchainBackground() {
           const b = nodes[j]!;
           const dx = a.x - b.x;
           const dy = a.y - b.y;
-          const dist = Math.hypot(dx, dy);
-          if (dist > LINK_DISTANCE) continue;
+          // Compare squared lengths: Math.hypot is far slower than a multiply
+          // and this runs n²/2 times per frame.
+          const distSq = dx * dx + dy * dy;
+          if (distSq > LINK_DISTANCE_SQ) continue;
 
-          const alpha = (1 - dist / LINK_DISTANCE) * 0.28;
+          const alpha = (1 - Math.sqrt(distSq) / LINK_DISTANCE) * 0.28;
           ctx!.strokeStyle = `hsla(${(a.hue + b.hue) / 2}, 90%, 65%, ${alpha})`;
-          ctx!.lineWidth = 0.7;
           ctx!.beginPath();
           ctx!.moveTo(a.x, a.y);
           ctx!.lineTo(b.x, b.y);
           ctx!.stroke();
         }
 
+        // The nodes sit behind a blur and a vignette, so the per-node
+        // shadowBlur that used to be here was pure cost for no visible glow.
         ctx!.beginPath();
         ctx!.arc(a.x, a.y, a.r, 0, Math.PI * 2);
         ctx!.fillStyle = `hsla(${a.hue}, 95%, 72%, 0.85)`;
-        ctx!.shadowBlur = 12;
-        ctx!.shadowColor = `hsla(${a.hue}, 95%, 65%, 0.9)`;
         ctx!.fill();
-        ctx!.shadowBlur = 0;
       }
-
-      if (running) raf = requestAnimationFrame(draw);
     }
 
     resize();
     if (reduceMotion) {
-      draw();          // one static frame
       running = false;
-      cancelAnimationFrame(raf);
+      draw(0); // one static frame
     } else {
       raf = requestAnimationFrame(draw);
     }
@@ -116,8 +127,12 @@ export function BlockchainBackground() {
       }
     }
 
+    // Resize rebuilds every node, so a drag would otherwise rebuild dozens
+    // of times a second.
+    let resizeTimer = 0;
     const onResize = () => {
-      resize();
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(resize, 150);
     };
 
     window.addEventListener("resize", onResize);
@@ -125,6 +140,7 @@ export function BlockchainBackground() {
 
     return () => {
       running = false;
+      window.clearTimeout(resizeTimer);
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);

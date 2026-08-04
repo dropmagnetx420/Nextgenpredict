@@ -52,7 +52,19 @@ function humanizeAuthError(message: string): string {
     return "That code has expired. Request a new one.";
   }
   if (m.includes("weak password")) return "Choose a stronger password.";
+  if (m.includes("database error")) {
+    return "We couldn't finish setting up your account. Please try again in a moment.";
+  }
   return "Authentication failed. Please try again.";
+}
+
+/**
+ * Supabase collapses provisioning failures into an opaque "Database error"
+ * and the copy above hides the rest, so the raw text is kept in the server
+ * log — otherwise a broken signup is undiagnosable in production.
+ */
+function logAuthError(scope: string, message: string): void {
+  console.error(`[auth/${scope}]`, message);
 }
 
 export async function signUp(
@@ -80,8 +92,10 @@ export async function signUp(
     },
   });
 
-  if (error) return fail(humanizeAuthError(error.message));
-
+  if (error) {
+    logAuthError("signup", error.message);
+    return fail(humanizeAuthError(error.message));
+  }
   // Supabase returns a user with no identities when the email already exists.
   if (data.user && data.user.identities?.length === 0) {
     return fail("An account with that email already exists. Try signing in.");
@@ -116,7 +130,10 @@ export async function signIn(
     password: parsed.data.password,
   });
 
-  if (error) return fail(humanizeAuthError(error.message));
+  if (error) {
+    logAuthError("signin", error.message);
+    return fail(humanizeAuthError(error.message));
+  }
 
   revalidatePath("/", "layout");
   redirect(safeNext(parsed.data.next));

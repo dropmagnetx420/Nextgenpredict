@@ -22,6 +22,12 @@
   --animate-marquee: marquee 30s linear infinite;
   --animate-orbit: orbit 14s linear infinite;
   --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-page-in: pageIn 0.25s ease-out both;
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes float {
@@ -29,9 +35,12 @@
   50% { transform: translateY(-14px) }
 }
 
+/* Animating `filter: blur()` re-runs the blur on a ~500px surface every
+   frame. Opacity and transform stay on the compositor, so the blooms cost
+   nothing to keep moving. */
 @keyframes glowPulse {
-  0%, 100% { opacity: 0.6; filter: blur(40px); }
-  50% { opacity: 1; filter: blur(56px); }
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
 }
 
 @keyframes gridPan {
@@ -114,4 +123,16 @@
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* The canvas checks this itself; this covers the CSS-driven decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

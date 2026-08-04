@@ -16,11 +16,34 @@ export const getSessionUser = cache(async (): Promise<AppUser | null> => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from("users")
     .select("*")
     .eq("id", user.id)
     .maybeSingle<AppUser>();
+
+  // A signed-in account with no profile row means provisioning failed at
+  // signup. Returning null here would bounce the visitor to /login, which
+  // middleware sends straight back to /dashboard — an endless loop the user
+  // can never escape. Repair the row instead.
+  if (!profile) {
+    const { error } = await supabase.rpc("ensure_user_profile", {
+      p_user_id: user.id,
+      p_email: user.email,
+      p_full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+      p_avatar_url: user.user_metadata?.avatar_url ?? null,
+      p_referral_code: user.user_metadata?.referral_code ?? null,
+    });
+    if (error) {
+      console.error("[auth] profile repair failed:", error.message);
+      return null;
+    }
+    ({ data: profile } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle<AppUser>());
+  }
 
   if (!profile) return null;
 
@@ -60,6 +83,20 @@ export const getWallet = cache(async (userId: string): Promise<Wallet | null> =>
     .eq("user_id", userId)
     .maybeSingle<Wallet>();
   return data;
+});
+
+/**
+ * Whether the visitor is signed in, without loading their profile.
+ *
+ * The site header only needs to pick between "Dashboard" and "Sign in", so
+ * it would otherwise pay for a `users` row it never reads.
+ */
+export const hasSession = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return Boolean(user);
 });
 
 /** Redirects unauthenticated visitors to login, preserving the target path. */

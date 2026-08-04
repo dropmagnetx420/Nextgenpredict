@@ -1,26 +1,22 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
 /**
- * Fades + lifts page content on route change. Mounted once in the root
- * layout around `{children}`.
+ * Fades + lifts page content on route change.
+ *
+ * Deliberately CSS rather than framer-motion: this wraps every public page,
+ * so importing an animation library here pulled it into the first load of
+ * the whole marketing site to run a quarter-second fade.
+ *
+ * The `key` remounts the node on navigation, which restarts the animation.
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div key={pathname} className="animate-page-in">
+      {children}
+    </div>
   );
 }

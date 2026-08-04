@@ -10,6 +10,7 @@ import {
   balanceAdjustSchema,
   depositAddressSchema,
   grantBonusSchema,
+  marketOptionsSchema,
   marketSchema,
   partnerSchema,
   promoBannerSchema,
@@ -30,6 +31,22 @@ const nullable = (value: string | null | undefined) => (value ? value : null);
 
 // ─── Markets ─────────────────────────────────────────────────
 
+/**
+ * The outcome editor posts parallel `option_label` / `option_price` fields,
+ * which FormData flattens into repeated keys. Zip them back into rows.
+ */
+function parseOptions(formData: FormData) {
+  const labels = formData.getAll("option_label");
+  const prices = formData.getAll("option_price");
+
+  const rows = labels.map((label, index) => ({
+    label: String(label ?? ""),
+    price: String(prices[index] ?? ""),
+  }));
+
+  return marketOptionsSchema.safeParse(rows);
+}
+
 export async function saveMarket(
   _prev: ActionResult<Market> | null,
   formData: FormData
@@ -39,10 +56,18 @@ export async function saveMarket(
   const parsed = parseForm(marketSchema, formData);
   if (!parsed.success) return parsed.result;
 
+  const options = parseOptions(formData);
+  if (!options.success) {
+    const first = options.error.issues[0];
+    return fail(first?.message ?? "Check the outcomes and try again.", {
+      options: options.error.issues.map((issue) => issue.message),
+    });
+  }
+
   const id = String(formData.get("id") ?? "").trim();
   const d = parsed.data;
 
-  const row = {
+  const market = {
     title: d.title,
     question: d.question,
     description: nullable(d.description),
@@ -53,7 +78,6 @@ export async function saveMarket(
     team_a_logo: d.team_a_logo ?? null,
     team_b_logo: d.team_b_logo ?? null,
     banner_url: d.banner_url ?? null,
-    yes_price: d.yes_price,
     min_trade: d.min_trade,
     max_trade: d.max_trade,
     start_time: new Date(d.start_time).toISOString(),
@@ -61,32 +85,31 @@ export async function saveMarket(
     status: d.status,
     is_trending: Boolean(d.is_trending),
     is_featured: Boolean(d.is_featured),
+    slug: slugify(d.title),
   };
 
-  const supabase = await createClient();
+  // The market row and its outcomes are written in one transaction so a
+  // market can never exist with nothing to trade on.
+  const result = await callRpc<Market>("admin_save_market", {
+    p_market: market,
+    p_options: options.data,
+    p_id: id || null,
+  });
 
-  const { data, error } = id
-    ? await supabase.from("markets").update(row).eq("id", id).select().single()
-    : await supabase
-        .from("markets")
-        .insert({ ...row, slug: slugify(d.title) })
-        .select()
-        .single();
-
-  if (error) {
-    if (error.message.includes("markets_slug_key")) {
+  if (!result.ok) {
+    if (result.error.includes("already exists")) {
       return fail("A market with a very similar title already exists.", {
         title: ["Pick a more distinct title."],
       });
     }
-    return fail(humanizeDbError(error.message));
+    return result;
   }
 
   revalidatePath("/admin/markets");
   revalidatePath("/markets");
   revalidatePath("/");
 
-  return ok(data as Market, id ? "Market updated." : "Market created.");
+  return ok(result.data, id ? "Market updated." : "Market created.");
 }
 
 export async function resolveMarket(
@@ -100,7 +123,7 @@ export async function resolveMarket(
 
   const result = await callRpc<number>("resolve_market", {
     p_market_id: parsed.data.market_id,
-    p_outcome: parsed.data.outcome,
+    p_winning_option_id: parsed.data.winning_option_id,
     p_note: nullable(parsed.data.note),
   });
   if (!result.ok) return result;

@@ -10,11 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Field, FormBanner, SubmitButton } from "@/components/ui/form";
 import { placeTrade } from "@/app/actions/trade";
 import { calcFee, calcPayout, cn, fmtCents, fmtMoney } from "@/lib/utils";
-import type { ActionResult, Trade, TradeSide } from "@/lib/types";
+import type { ActionResult, Trade, MarketOption } from "@/lib/types";
 
 export function TradePanel({
   marketId,
-  yesPrice,
+  options,
   minTrade,
   maxTrade,
   isOpen,
@@ -23,7 +23,7 @@ export function TradePanel({
   fee,
 }: {
   marketId: string;
-  yesPrice: number;
+  options: Pick<MarketOption, "id" | "label" | "price">[];
   minTrade: number;
   maxTrade: number;
   isOpen: boolean;
@@ -32,7 +32,7 @@ export function TradePanel({
   fee: { percent: number; min: number; max: number };
 }) {
   const router = useRouter();
-  const [side, setSide] = useState<TradeSide>("yes");
+  const [optionId, setOptionId] = useState(options[0]?.id ?? "");
   const [stake, setStake] = useState(String(minTrade));
 
   const [state, action] = useActionState<ActionResult<Trade> | null, FormData>(
@@ -48,7 +48,8 @@ export function TradePanel({
     }
   }, [state, minTrade, router]);
 
-  const price = side === "yes" ? yesPrice : 100 - yesPrice;
+  const selected = options.find((opt) => opt.id === optionId) ?? options[0];
+  const price = selected?.price ?? 50;
   const stakeNum = Number(stake) || 0;
   const feeAmount = stakeNum > 0 ? calcFee(stakeNum, fee.percent, fee.min, fee.max) : 0;
   const payout = calcPayout(stakeNum, price);
@@ -72,50 +73,34 @@ export function TradePanel({
   return (
     <Card className="sticky top-20">
       <CardContent className="p-5">
-        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Choose a side">
-          <button
-            type="button"
-            onClick={() => setSide("yes")}
-            aria-pressed={side === "yes"}
-            className={cn(
-              "rounded-xl border px-3 py-3 text-left transition-all",
-              side === "yes"
-                ? "border-emerald-400/60 bg-emerald-400/15 shadow-[0_0_24px_-8px_#00ffb3]"
-                : "border-white/10 bg-white/[0.03] hover:border-emerald-400/40"
-            )}
-          >
-            <span className="text-[11px] font-medium uppercase tracking-wide text-emerald-300/80">
-              Yes
-            </span>
-            <span className="block font-display text-xl font-bold text-emerald-300">
-              {fmtCents(yesPrice)}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSide("no")}
-            aria-pressed={side === "no"}
-            className={cn(
-              "rounded-xl border px-3 py-3 text-left transition-all",
-              side === "no"
-                ? "border-rose-400/60 bg-rose-400/15 shadow-[0_0_24px_-8px_#fb7185]"
-                : "border-white/10 bg-white/[0.03] hover:border-rose-400/40"
-            )}
-          >
-            <span className="text-[11px] font-medium uppercase tracking-wide text-rose-300/80">
-              No
-            </span>
-            <span className="block font-display text-xl font-bold text-rose-300">
-              {fmtCents(100 - yesPrice)}
-            </span>
-          </button>
+        <div className="space-y-2" role="group" aria-label="Choose an outcome">
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setOptionId(option.id)}
+              aria-pressed={optionId === option.id}
+              className={cn(
+                "w-full rounded-xl border px-3 py-3 text-left transition-all",
+                optionId === option.id
+                  ? "border-accent/60 bg-accent/15 shadow-[0_0_24px_-8px_var(--color-accent)]"
+                  : "border-white/10 bg-white/[0.03] hover:border-accent/40"
+              )}
+            >
+              <span className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">{option.label}</span>
+                <span className="font-display text-xl font-bold text-accent">
+                  {fmtCents(option.price)}
+                </span>
+              </span>
+            </button>
+          ))}
         </div>
 
         {isSignedIn ? (
           <form action={action} className="mt-5 space-y-4">
             <input type="hidden" name="market_id" value={marketId} />
-            <input type="hidden" name="side" value={side} />
+            <input type="hidden" name="option_id" value={optionId} />
 
             {!state?.ok && state?.error && <FormBanner>{state.error}</FormBanner>}
 
@@ -189,7 +174,7 @@ export function TradePanel({
               </Button>
             ) : (
               <SubmitButton className="w-full" size="lg" pendingLabel="Placing…">
-                Buy {side === "yes" ? "YES" : "NO"} at {fmtCents(price)}
+                Buy {selected?.label ?? "outcome"} at {fmtCents(price)}
               </SubmitButton>
             )}
           </form>

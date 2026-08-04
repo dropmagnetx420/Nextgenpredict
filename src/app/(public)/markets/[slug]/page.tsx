@@ -11,9 +11,18 @@ import { getSessionUser, getWallet } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { createClient } from "@/lib/supabase/server";
 import { fmtCents, fmtCompact, fmtDateTime, fmtMoney, fmtRelative } from "@/lib/utils";
-import type { Market } from "@/lib/types";
+import type { Market, MarketOption } from "@/lib/types";
 
 export const revalidate = 15;
+
+const SHARE_COLORS = [
+  "bg-accent",
+  "bg-secondary",
+  "bg-primary",
+  "bg-emerald-400",
+  "bg-amber-400",
+  "bg-rose-400",
+];
 
 async function loadMarket(slug: string): Promise<Market | null> {
   const supabase = await createClient();
@@ -23,6 +32,16 @@ async function loadMarket(slug: string): Promise<Market | null> {
     .eq("slug", slug)
     .maybeSingle<Market>();
   return data;
+}
+
+async function loadOptions(marketId: string): Promise<MarketOption[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("market_options")
+    .select("*")
+    .eq("market_id", marketId)
+    .order("sort_order");
+  return (data ?? []) as MarketOption[];
 }
 
 export async function generateMetadata({
@@ -55,19 +74,35 @@ export default async function MarketDetailPage({
   if (!market || market.status === "draft") notFound();
 
   const [user, settings] = await Promise.all([getSessionUser(), getSettings()]);
-  const wallet = user ? await getWallet(user.id) : null;
+  const [wallet, options] = await Promise.all([
+    user ? getWallet(user.id) : null,
+    loadOptions(market.id),
+  ]);
   const balance = wallet ? Number(wallet.available) + Number(wallet.bonus) : null;
 
-  const yesPrice = Number(market.yes_price);
+  const tradable = options.filter((option) => option.is_active);
   const tradingOpen =
     market.status === "open" &&
     new Date(market.end_time) > new Date() &&
-    settings.trading_enabled;
+    settings.trading_enabled &&
+    tradable.length >= 2;
 
-  const yesVol = Number(market.yes_volume);
-  const noVol = Number(market.no_volume);
-  const totalVol = yesVol + noVol;
-  const yesShare = totalVol > 0 ? (yesVol / totalVol) * 100 : 50;
+  // Sentiment is share of open interest, so it reflects live positions rather
+  // than the lifetime volume headline.
+  const openInterest = options.reduce((sum, option) => sum + Number(option.volume), 0);
+  const shares = options.map((option) => ({
+    option,
+    share:
+      openInterest > 0
+        ? (Number(option.volume) / openInterest) * 100
+        : 100 / Math.max(options.length, 1),
+  }));
+
+  const favourite = options.reduce<MarketOption | null>(
+    (best, option) => (!best || Number(option.price) > Number(best.price) ? option : best),
+    null
+  );
+  const winner = options.find((option) => option.id === market.winning_option_id);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6">
@@ -115,8 +150,10 @@ export default async function MarketDetailPage({
               </dd>
             </div>
             <div className="rounded-xl border border-white/10 bg-surface/50 px-4 py-3">
-              <dt className="text-xs uppercase tracking-wide text-muted">Implied odds</dt>
-              <dd className="mt-1 font-display text-lg font-bold">{fmtCents(yesPrice)}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted">Favourite</dt>
+              <dd className="mt-1 truncate font-display text-lg font-bold">
+                {favourite ? `${favourite.label} ${fmtCents(favourite.price)}` : "—"}
+              </dd>
             </div>
           </dl>
 
@@ -126,25 +163,34 @@ export default async function MarketDetailPage({
               <div
                 className="mt-4 flex h-3 overflow-hidden rounded-full bg-white/10"
                 role="img"
-                aria-label={`Yes ${yesShare.toFixed(0)} percent of volume`}
+                aria-label="Share of open interest by outcome"
               >
-                <div
-                  className="bg-gradient-to-r from-emerald-500 to-accent"
-                  style={{ width: `${yesShare}%` }}
-                />
-                <div
-                  className="bg-gradient-to-r from-rose-500 to-rose-400"
-                  style={{ width: `${100 - yesShare}%` }}
-                />
+                {shares.map(({ option, share }, index) => (
+                  <div
+                    key={option.id}
+                    className={SHARE_COLORS[index % SHARE_COLORS.length]}
+                    style={{ width: `${share}%` }}
+                  />
+                ))}
               </div>
-              <div className="mt-3 flex justify-between text-sm">
-                <span className="text-emerald-300">
-                  YES {fmtMoney(yesVol)} ({yesShare.toFixed(0)}%)
-                </span>
-                <span className="text-rose-300">
-                  NO {fmtMoney(noVol)} ({(100 - yesShare).toFixed(0)}%)
-                </span>
-              </div>
+              <ul className="mt-3 space-y-1.5 text-sm">
+                {shares.map(({ option, share }, index) => (
+                  <li key={option.id} className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                          SHARE_COLORS[index % SHARE_COLORS.length]
+                        }`}
+                        aria-hidden
+                      />
+                      <span className="truncate">{option.label}</span>
+                    </span>
+                    <span className="shrink-0 text-muted">
+                      {fmtCents(option.price)} · {fmtMoney(option.volume)} ({share.toFixed(0)}%)
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </CardContent>
           </Card>
 
@@ -182,13 +228,13 @@ export default async function MarketDetailPage({
                 </div>
               </dl>
 
-              {market.status === "resolved" && (
+              {(market.status === "resolved" || market.status === "cancelled") && (
                 <>
                   <Separator className="my-4" />
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-muted">Resolved</span>
-                    <Badge variant={market.outcome === "invalid" ? "outline" : "success"}>
-                      {market.outcome?.toUpperCase()}
+                    <Badge variant={winner ? "success" : "outline"}>
+                      {winner ? winner.label : "Voided — refunded"}
                     </Badge>
                     <span className="text-muted">on {fmtDateTime(market.resolved_at)}</span>
                   </div>
@@ -204,7 +250,7 @@ export default async function MarketDetailPage({
         <aside>
           <TradePanel
             marketId={market.id}
-            yesPrice={yesPrice}
+            options={tradable}
             minTrade={Number(market.min_trade)}
             maxTrade={Number(market.max_trade)}
             isOpen={tradingOpen}

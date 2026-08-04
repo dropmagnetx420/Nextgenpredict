@@ -22,7 +22,7 @@ export default function TermsPage() {
         {
           heading: "2. Markets and pricing",
           body: [
-            "Each market is a binary question with YES and NO shares quoted in cents that always sum to 100. Prices move as traders take positions; a quoted price is not a guarantee of execution at that price if the market state changes between your request and confirmation.",
+            "Each market lists two or more possible outcomes, each quoted in cents as an implied probability. Prices move as traders take positions; a quoted price is not a guarantee of execution at that price if the market state changes between your request and confirmation.",
             "Minimum and maximum position sizes are published on each market and may be adjusted before a market opens.",
           ],
         },

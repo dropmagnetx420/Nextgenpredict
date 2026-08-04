@@ -9,7 +9,7 @@
 -- their profile/wallet rows are removed, so delete them from
 -- Authentication → Users afterwards if you want a truly clean slate.
 --
--- After this completes, run 0001 through 0009 in order.
+-- After this completes, run 0001 through 0012 in order.
 -- ============================================================
 
 -- Trigger on auth.users must go first; it depends on handle_new_user().
@@ -39,6 +39,7 @@ drop table if exists public.users             cascade;
 -- ------------------------ FUNCTIONS ------------------------
 -- Names are unique in this schema, so the arg-less form is safe.
 drop function if exists public.admin_adjust_balance      cascade;
+drop function if exists public.admin_save_market         cascade;
 drop function if exists public.apply_balance             cascade;
 drop function if exists public.approve_deposit           cascade;
 drop function if exists public.auto_close_expired_markets cascade;
@@ -52,7 +53,9 @@ drop function if exists public.credit_turnover           cascade;
 drop function if exists public.derive_yes_price          cascade;
 drop function if exists public.gen_referral_code         cascade;
 drop function if exists public.grant_bonus               cascade;
+drop function if exists public.guard_market_open         cascade;
 drop function if exists public.guard_notification_columns cascade;
+drop function if exists public.guard_option_frozen       cascade;
 drop function if exists public.guard_user_columns        cascade;
 drop function if exists public.handle_new_user           cascade;
 drop function if exists public.is_admin                  cascade;
@@ -62,6 +65,7 @@ drop function if exists public.pending_turnover          cascade;
 drop function if exists public.place_trade               cascade;
 drop function if exists public.random_deposit_address    cascade;
 drop function if exists public.reject_deposit            cascade;
+drop function if exists public.reprice_market_options    cascade;
 drop function if exists public.resolve_market            cascade;
 drop function if exists public.revenue_summary           cascade;
 drop function if exists public.review_kyc                cascade;

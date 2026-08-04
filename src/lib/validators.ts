@@ -132,7 +132,7 @@ export const profileSchema = z.object({
 // ─── Trading ─────────────────────────────────────────────────
 export const placeTradeSchema = z.object({
   market_id: z.string().uuid("Invalid market"),
-  side: z.enum(["yes", "no"]),
+  option_id: z.string().uuid("Pick an outcome"),
   stake: money,
 });
 
@@ -183,6 +183,36 @@ export const kycSchema = z.object({
 });
 
 // ─── Admin: markets ──────────────────────────────────────────
+export const MAX_MARKET_OPTIONS = 12;
+
+/** One row of the outcome editor: what members can back, and at what price. */
+export const marketOptionSchema = z.object({
+  label: safeText(60, "Outcome name"),
+  price: z.coerce
+    .number()
+    .min(1, "Opening odds must be at least 1¢")
+    .max(99, "Opening odds must be at most 99¢"),
+});
+
+export const marketOptionsSchema = z
+  .array(marketOptionSchema)
+  .min(2, "A market needs at least two outcomes")
+  .max(MAX_MARKET_OPTIONS, `A market can have at most ${MAX_MARKET_OPTIONS} outcomes`)
+  .superRefine((options, ctx) => {
+    const seen = new Set<string>();
+    options.forEach((option, index) => {
+      const key = option.label.toLowerCase();
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "label"],
+          message: `"${option.label}" is listed twice`,
+        });
+      }
+      seen.add(key);
+    });
+  });
+
 export const marketSchema = z
   .object({
     title: safeText(140, "Title"),
@@ -195,10 +225,6 @@ export const marketSchema = z
     team_a_logo: optionalUrl,
     team_b_logo: optionalUrl,
     banner_url: optionalUrl,
-    yes_price: z.coerce
-      .number()
-      .min(2, "Opening odds must be at least 2¢")
-      .max(98, "Opening odds must be at most 98¢"),
     min_trade: money,
     max_trade: money,
     start_time: z.string().trim().min(1, "Start time is required"),
@@ -216,9 +242,14 @@ export const marketSchema = z
     message: "Maximum must be greater than or equal to the minimum",
   });
 
+/** An empty winning_option_id means "void the market and refund everyone". */
 export const resolveMarketSchema = z.object({
   market_id: z.string().uuid(),
-  outcome: z.enum(["yes", "no", "invalid"]),
+  winning_option_id: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || z.string().uuid().safeParse(v).success, "Pick an outcome")
+    .transform((v) => (v === "" ? null : v)),
   note: z.string().trim().max(500).optional().or(z.literal("")),
 });
 

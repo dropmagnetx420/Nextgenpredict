@@ -129,6 +129,12 @@ const DB_ERRORS: Record<string, string> = {
   MARKET_CLOSED: "This market has closed.",
   MARKET_ALREADY_SETTLED: "This market is already settled.",
   MARKET_NOT_CANCELLABLE: "Trades can only be cancelled while the market is open.",
+  MARKET_HAS_TRADES:
+    "This market already has predictions on it, so its outcomes can no longer be changed.",
+  OPTION_NOT_FOUND: "That outcome is not part of this market.",
+  OPTION_NOT_AVAILABLE: "That outcome is no longer available.",
+  TOO_FEW_OPTIONS: "A market needs at least two outcomes before it can open.",
+  TOO_MANY_OPTIONS: "That's more outcomes than a market can hold.",
   STAKE_BELOW_MIN: "Stake is below the market minimum.",
   STAKE_ABOVE_MAX: "Stake exceeds the market maximum.",
   TRADE_NOT_FOUND: "Trade not found.",

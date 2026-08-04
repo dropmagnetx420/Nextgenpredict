@@ -8,8 +8,6 @@ export type KycStatus = "none" | "pending" | "approved" | "rejected";
 export type KycDocType = "national_id" | "passport" | "driving_license";
 export type Sport = "football" | "cricket" | "basketball" | "tennis" | "esports";
 export type MarketStatus = "draft" | "open" | "closed" | "resolved" | "cancelled";
-export type MarketOutcome = "yes" | "no" | "invalid";
-export type TradeSide = "yes" | "no";
 export type TradeStatus = "open" | "cancelled" | "won" | "lost" | "refunded";
 export type RequestStatus = "pending" | "approved" | "rejected";
 export type ChainNetwork = "robinhood" | "ethereum";
@@ -76,15 +74,13 @@ export interface Market {
   team_a_logo: string | null;
   team_b_logo: string | null;
   banner_url: string | null;
-  yes_price: number;
   min_trade: number;
   max_trade: number;
+  /** Lifetime traded volume. Never reduced when a trade is cancelled. */
   total_volume: number;
-  yes_volume: number;
-  no_volume: number;
   trade_count: number;
   status: MarketStatus;
-  outcome: MarketOutcome | null;
+  winning_option_id: string | null;
   is_trending: boolean;
   is_featured: boolean;
   start_time: string;
@@ -97,12 +93,26 @@ export interface Market {
   updated_at: string;
 }
 
+export interface MarketOption {
+  id: string;
+  market_id: string;
+  label: string;
+  price: number;
+  /** Open interest on this option. Released when a trade is cancelled. */
+  volume: number;
+  is_winner: boolean | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export type MarketWithOptions = Market & { options: MarketOption[] };
+
 export interface Trade {
   id: string;
   user_id: string;
   market_id: string;
-  market_option_id: string | null;
-  side: TradeSide;
+  market_option_id: string;
   stake: number;
   stake_from_main: number;
   stake_from_bonus: number;
@@ -119,7 +129,10 @@ export interface Trade {
   created_at: string;
 }
 
-export type TradeWithMarket = Trade & { market: Market | null };
+export type TradeWithMarket = Trade & {
+  market: Market | null;
+  option: Pick<MarketOption, "id" | "label"> | null;
+};
 
 export interface Transaction {
   id: string;

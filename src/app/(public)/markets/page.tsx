@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SPORTS, PAGE_SIZE } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { getOptionsByMarket } from "@/lib/markets";
 import type { Market, Sport } from "@/lib/types";
 
 export const revalidate = 30;
@@ -54,6 +55,7 @@ export default async function MarketsPage({
   const markets = (data ?? []) as Market[];
   const total = count ?? 0;
   const hasNext = from + markets.length < total;
+  const optionsByMarket = await getOptionsByMarket(markets.map((market) => market.id));
 
   const buildHref = (next: Record<string, string | number | undefined>) => {
     const sp = new URLSearchParams();
@@ -119,7 +121,11 @@ export default async function MarketsPage({
       ) : (
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {markets.map((market) => (
-            <MarketCard key={market.id} market={market} />
+            <MarketCard
+              key={market.id}
+              market={market}
+              options={optionsByMarket.get(market.id) ?? []}
+            />
           ))}
         </div>
       )}

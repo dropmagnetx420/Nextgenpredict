@@ -44,7 +44,7 @@ export default async function PositionsPage({
   const supabase = await createClient();
   let query = supabase
     .from("trades")
-    .select("*, market:markets(*)", { count: "exact" })
+    .select("*, market:markets(*), option:market_options(id, label)", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -139,15 +139,9 @@ export default async function PositionsPage({
 
                     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <div>
-                        <dt className="text-xs text-muted">Side</dt>
-                        <dd
-                          className={
-                            trade.side === "yes"
-                              ? "font-semibold text-emerald-300"
-                              : "font-semibold text-rose-300"
-                          }
-                        >
-                          {trade.side.toUpperCase()} @ {fmtCents(trade.price)}
+                        <dt className="text-xs text-muted">Outcome</dt>
+                        <dd className="truncate font-semibold text-accent">
+                          {trade.option?.label ?? "—"} @ {fmtCents(trade.price)}
                         </dd>
                       </div>
                       <div>

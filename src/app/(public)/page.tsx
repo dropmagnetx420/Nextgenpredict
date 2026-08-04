@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SPORTS, FAQ_ITEMS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { getSettings } from "@/lib/settings";
+import { getOptionsByMarket } from "@/lib/markets";
 import { fmtCompact, fmtMoney } from "@/lib/utils";
 import type { Market, Partner, PromoBanner } from "@/lib/types";
 
@@ -70,6 +71,7 @@ export default async function HomePage() {
 
   const totalVolume = markets.reduce((sum, m) => sum + Number(m.total_volume), 0);
   const totalTrades = markets.reduce((sum, m) => sum + Number(m.trade_count), 0);
+  const optionsByMarket = await getOptionsByMarket(markets.map((market) => market.id));
 
   return (
     <>
@@ -82,8 +84,9 @@ export default async function HomePage() {
               <span className="text-gradient">every game that matters</span>
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-              Buy YES or NO shares on football, cricket, basketball, tennis and esports events.
-              Prices are probabilities in cents. Winning shares settle at 1.00 USDG.
+              Back any outcome — home, draw, away or anything else — on football, cricket,
+              basketball, tennis and esports events. Prices are probabilities in cents.
+              Winning shares settle at 1.00 USDG.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -183,7 +186,11 @@ export default async function HomePage() {
         ) : (
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {markets.map((market) => (
-              <MarketCard key={market.id} market={market} />
+              <MarketCard
+                key={market.id}
+                market={market}
+                options={optionsByMarket.get(market.id) ?? []}
+              />
             ))}
           </div>
         )}

@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import {
@@ -15,7 +17,8 @@ import {
 import { Field, FormBanner, SubmitButton } from "@/components/ui/form";
 import { saveMarket } from "@/app/actions/admin";
 import { SPORTS } from "@/lib/constants";
-import type { ActionResult, Market } from "@/lib/types";
+import { MAX_MARKET_OPTIONS } from "@/lib/validators";
+import type { ActionResult, Market, MarketOption } from "@/lib/types";
 
 /** `datetime-local` needs `YYYY-MM-DDTHH:mm` in local time. */
 function toLocalInput(iso: string | null | undefined): string {
@@ -26,12 +29,69 @@ function toLocalInput(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function MarketForm({ market }: { market?: Market }) {
+interface MarketFormProps {
+  market?: Market;
+  options?: Pick<MarketOption, "label" | "price">[];
+  /** Once a market has predictions on it, its outcome set is frozen. */
+  hasTrades?: boolean;
+}
+
+interface OptionRow {
+  key: number;
+  label: string;
+  price: string;
+}
+
+/** Even opening quote across n outcomes, e.g. 3 → 33¢ each. */
+function evenPrice(count: number): string {
+  return String(Math.max(1, Math.min(99, Math.round(100 / Math.max(count, 1)))));
+}
+
+function presetRows(labels: string[], startKey: number): OptionRow[] {
+  const price = evenPrice(labels.length);
+  return labels.map((label, index) => ({ key: startKey + index, label, price }));
+}
+
+export function MarketForm({ market, options: existingOptions, hasTrades }: MarketFormProps) {
   const router = useRouter();
   const [state, action] = useActionState<ActionResult<Market> | null, FormData>(
     saveMarket,
     null
   );
+
+  const [rows, setRows] = useState<OptionRow[]>(() =>
+    existingOptions?.length
+      ? existingOptions.map((option, index) => ({
+          key: index,
+          label: option.label,
+          price: String(option.price),
+        }))
+      : presetRows(["", ""], 0)
+  );
+  // Monotonic so React keys stay stable as rows are added and removed.
+  const [nextKey, setNextKey] = useState(() => rows.length);
+
+  const locked = Boolean(hasTrades);
+
+  function updateRow(key: number, patch: Partial<OptionRow>) {
+    setRows((current) =>
+      current.map((row) => (row.key === key ? { ...row, ...patch } : row))
+    );
+  }
+
+  function addRow() {
+    setRows((current) => [...current, { key: nextKey, label: "", price: evenPrice(current.length + 1) }]);
+    setNextKey((key) => key + 1);
+  }
+
+  function removeRow(key: number) {
+    setRows((current) => (current.length <= 2 ? current : current.filter((row) => row.key !== key)));
+  }
+
+  function applyPreset(labels: string[]) {
+    setRows(presetRows(labels, nextKey));
+    setNextKey((key) => key + labels.length);
+  }
 
   useEffect(() => {
     if (state?.ok) {
@@ -63,7 +123,7 @@ export function MarketForm({ market }: { market?: Market }) {
           <Field
             label="Question"
             htmlFor="question"
-            hint="Phrase it so YES is unambiguous."
+            hint="What are members predicting?"
             errors={errors?.question}
           >
             <Input
@@ -71,7 +131,7 @@ export function MarketForm({ market }: { market?: Market }) {
               name="question"
               required
               defaultValue={market?.question ?? ""}
-              placeholder="Will Arsenal win?"
+              placeholder="Which team will win the match?"
             />
           </Field>
 
@@ -146,24 +206,103 @@ export function MarketForm({ market }: { market?: Market }) {
             />
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field
-              label="Opening YES price (¢)"
-              htmlFor="yes_price"
-              hint="2–98. NO is the remainder."
-              errors={errors?.yes_price}
-            >
-              <Input
-                id="yes_price"
-                name="yes_price"
-                type="number"
-                min={2}
-                max={98}
-                step="1"
-                required
-                defaultValue={market?.yes_price ?? 50}
-              />
-            </Field>
+          <div className="space-y-3 rounded-2xl border border-white/12 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground/90">Outcomes</p>
+                <p className="text-xs text-muted">
+                  {locked
+                    ? "This market already has predictions, so its outcomes are locked."
+                    : "Two or more. Opening odds are in cents and move with traded volume."}
+                </p>
+              </div>
+              {!locked && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => applyPreset(["Home", "Draw", "Away"])}
+                  >
+                    Home / Draw / Away
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => applyPreset(["Yes", "No"])}
+                  >
+                    Yes / No
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {rows.map((row, index) => (
+                <div key={row.key} className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <label className="sr-only" htmlFor={`option_label_${row.key}`}>
+                      Outcome {index + 1} name
+                    </label>
+                    <Input
+                      id={`option_label_${row.key}`}
+                      name="option_label"
+                      required
+                      readOnly={locked}
+                      maxLength={60}
+                      value={row.label}
+                      onChange={(event) => updateRow(row.key, { label: event.target.value })}
+                      placeholder={`Outcome ${index + 1}`}
+                    />
+                  </div>
+                  <div className="w-28">
+                    <label className="sr-only" htmlFor={`option_price_${row.key}`}>
+                      Outcome {index + 1} opening odds in cents
+                    </label>
+                    <Input
+                      id={`option_price_${row.key}`}
+                      name="option_price"
+                      type="number"
+                      min={1}
+                      max={99}
+                      step="1"
+                      required
+                      readOnly={locked}
+                      value={row.price}
+                      onChange={(event) => updateRow(row.key, { price: event.target.value })}
+                      aria-label={`Outcome ${index + 1} opening odds in cents`}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={locked || rows.length <= 2}
+                    onClick={() => removeRow(row.key)}
+                    aria-label={`Remove outcome ${index + 1}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            {!locked && rows.length < MAX_MARKET_OPTIONS && (
+              <Button type="button" variant="ghost" size="sm" onClick={addRow}>
+                <Plus className="h-4 w-4" />
+                Add outcome
+              </Button>
+            )}
+
+            {errors?.options?.length ? (
+              <p className="text-xs font-medium text-rose-300" role="alert">
+                {errors.options[0]}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Min trade (USDG)" htmlFor="min_trade" errors={errors?.min_trade}>
               <Input
                 id="min_trade"

@@ -57,7 +57,7 @@ export const PAGE_SIZE = 20;
 export const FAQ_ITEMS = [
   {
     q: "How do prediction markets work here?",
-    a: "Every market asks a yes-or-no question about a real sporting event. YES and NO shares are priced in cents and always sum to 100¢ — that price is the market's implied probability. Buy the side you believe is underpriced. Winning shares settle at 1.00 USDG each, losing shares at zero.",
+    a: "Every market asks a question about a real sporting event and lists the possible outcomes — that can be two sides, or home / draw / away, or any other set the event calls for. Each outcome has a price in cents that reflects its implied probability. Buy the outcome you believe is underpriced. Winning shares settle at 1.00 USDG each, losing shares at zero.",
   },
   {
     q: "What does a trade cost?",

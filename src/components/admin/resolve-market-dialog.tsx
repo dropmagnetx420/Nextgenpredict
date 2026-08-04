@@ -22,14 +22,20 @@ import {
 } from "@/components/ui/select";
 import { Field, FormBanner, SubmitButton } from "@/components/ui/form";
 import { resolveMarket } from "@/app/actions/admin";
-import type { ActionResult } from "@/lib/types";
+import { fmtCents } from "@/lib/utils";
+import type { ActionResult, MarketOption } from "@/lib/types";
+
+/** Empty string means "void the market and refund everyone". */
+const VOID_VALUE = "";
 
 export function ResolveMarketDialog({
   marketId,
   question,
+  options,
 }: {
   marketId: string;
   question: string;
+  options: Pick<MarketOption, "id" | "label" | "price">[];
 }) {
   const [open, setOpen] = useState(false);
   const [state, action] = useActionState<ActionResult<number> | null, FormData>(
@@ -67,15 +73,22 @@ export function ResolveMarketDialog({
 
           {state && !state.ok && <FormBanner>{state.error}</FormBanner>}
 
-          <Field label="Outcome" htmlFor={`outcome-${marketId}`} errors={errors?.outcome}>
-            <Select name="outcome" defaultValue="yes">
+          <Field
+            label="Winning outcome"
+            htmlFor={`outcome-${marketId}`}
+            errors={errors?.winning_option_id}
+          >
+            <Select name="winning_option_id" defaultValue={options[0]?.id ?? VOID_VALUE}>
               <SelectTrigger id={`outcome-${marketId}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="yes">YES won</SelectItem>
-                <SelectItem value="no">NO won</SelectItem>
-                <SelectItem value="invalid">Invalid — refund everyone</SelectItem>
+                {options.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label} — {fmtCents(option.price)}
+                  </SelectItem>
+                ))}
+                <SelectItem value={VOID_VALUE}>Void market — refund everyone</SelectItem>
               </SelectContent>
             </Select>
           </Field>

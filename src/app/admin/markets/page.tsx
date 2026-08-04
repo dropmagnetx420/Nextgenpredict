@@ -18,7 +18,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { PAGE_SIZE, SPORT_LABEL } from "@/lib/constants";
 import { fmtCents, fmtDateTime, fmtMoney } from "@/lib/utils";
-import type { Market, MarketStatus } from "@/lib/types";
+import type { Market, MarketStatus, MarketOption } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Markets · Admin",
@@ -59,6 +59,23 @@ export default async function AdminMarketsPage({
   const markets = (data ?? []) as Market[];
   const total = count ?? 0;
   const hasNext = from + markets.length < total;
+
+  type OptionCell = Pick<MarketOption, "id" | "market_id" | "label" | "price">;
+  const optionsByMarket = new Map<string, OptionCell[]>();
+
+  if (markets.length > 0) {
+    const { data: options } = await supabase
+      .from("market_options")
+      .select("id, market_id, label, price")
+      .in("market_id", markets.map((market) => market.id))
+      .order("sort_order");
+
+    for (const option of (options ?? []) as OptionCell[]) {
+      const list = optionsByMarket.get(option.market_id) ?? [];
+      list.push(option);
+      optionsByMarket.set(option.market_id, list);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -104,7 +121,13 @@ export default async function AdminMarketsPage({
             {markets.length === 0 ? (
               <TableEmpty colSpan={6}>No markets match this filter.</TableEmpty>
             ) : (
-              markets.map((market) => (
+              markets.map((market) => {
+                const options = optionsByMarket.get(market.id) ?? [];
+                const winner = options.find(
+                  (option) => option.id === market.winning_option_id
+                );
+
+                return (
                 <TableRow key={market.id}>
                   <TableCell>
                     <Link
@@ -120,9 +143,21 @@ export default async function AdminMarketsPage({
                     </p>
                   </TableCell>
                   <TableCell>
-                    <span className="text-accent">{fmtCents(market.yes_price)}</span>
-                    <span className="text-muted"> / </span>
-                    <span>{fmtCents(100 - market.yes_price)}</span>
+                    {options.length === 0 ? (
+                      <span className="text-xs text-muted">No outcomes</span>
+                    ) : (
+                      <div className="space-y-0.5 text-xs">
+                        {options.slice(0, 3).map((option) => (
+                          <div key={option.id} className="flex gap-2">
+                            <span className="truncate text-muted">{option.label}</span>
+                            <span className="text-accent">{fmtCents(option.price)}</span>
+                          </div>
+                        ))}
+                        {options.length > 3 && (
+                          <p className="text-muted">+{options.length - 3} more</p>
+                        )}
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     {fmtMoney(market.total_volume)}
@@ -131,9 +166,7 @@ export default async function AdminMarketsPage({
                   <TableCell className="text-muted">{fmtDateTime(market.end_time)}</TableCell>
                   <TableCell>
                     <Badge variant={statusVariant(market.status)}>{market.status}</Badge>
-                    {market.outcome && (
-                      <p className="mt-1 text-xs uppercase text-muted">{market.outcome}</p>
-                    )}
+                    {winner && <p className="mt-1 text-xs text-muted">{winner.label}</p>}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap justify-end gap-2">
@@ -147,6 +180,7 @@ export default async function AdminMarketsPage({
                         <ResolveMarketDialog
                           marketId={market.id}
                           question={market.question}
+                          options={options}
                         />
                       )}
                       <Button asChild variant="ghost" size="sm">
@@ -155,7 +189,8 @@ export default async function AdminMarketsPage({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

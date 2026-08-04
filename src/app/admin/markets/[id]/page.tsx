@@ -23,14 +23,22 @@ export default async function EditMarketPage({
   const { id } = await params;
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data: market } = await supabase
     .from("markets")
     .select("*")
     .eq("id", id)
     .maybeSingle<Market>();
 
-  if (!data) notFound();
-  const market = data;
+  if (!market) notFound();
+
+  const { data: options } = await supabase
+    .from("market_options")
+    .select("id, label, price, volume, is_active")
+    .eq("market_id", id)
+    .order("sort_order");
+
+  const marketOptions = options ?? [];
+  const hasTrades = market.trade_count > 0;
 
   const settled = market.status === "resolved" || market.status === "cancelled";
 
@@ -43,24 +51,60 @@ export default async function EditMarketPage({
           <div className="flex items-center gap-2">
             <Badge variant={statusVariant(market.status)}>{market.status}</Badge>
             {!settled && (
-              <ResolveMarketDialog marketId={market.id} question={market.question} />
+              <ResolveMarketDialog
+                marketId={market.id}
+                question={market.question}
+                options={marketOptions}
+              />
             )}
           </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Volume" value={`${fmtMoney(market.total_volume)} USDG`} />
         <StatCard label="Trades" value={String(market.trade_count)} />
-        <StatCard label="YES" value={fmtCents(market.yes_price)} tone="accent" />
-        <StatCard label="NO" value={fmtCents(100 - market.yes_price)} />
+        <StatCard label="Outcomes" value={String(marketOptions.length)} />
       </div>
+
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-sm font-medium text-foreground/90">Outcomes</p>
+          <ul className="mt-3 space-y-2">
+            {marketOptions.map((option) => (
+              <li
+                key={option.id}
+                className="flex items-center justify-between gap-3 text-sm"
+              >
+                <span
+                  className={
+                    market.winning_option_id === option.id
+                      ? "font-semibold text-accent"
+                      : undefined
+                  }
+                >
+                  {option.label}
+                  {market.winning_option_id === option.id ? " · winner" : ""}
+                </span>
+                <span className="text-muted">
+                  {fmtCents(option.price)} · {fmtMoney(option.volume)} USDG
+                </span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
 
       {settled ? (
         <Card>
           <CardContent className="p-6">
             <p className="font-display text-base font-semibold">
-              Settled {market.outcome?.toUpperCase()}
+              {market.status === "cancelled"
+                ? "Voided — everyone refunded"
+                : `Settled: ${
+                    marketOptions.find((o) => o.id === market.winning_option_id)?.label ??
+                    "unknown outcome"
+                  }`}
             </p>
             <p className="mt-1.5 text-sm text-muted">
               {market.resolved_at ? fmtDateTime(market.resolved_at) : "—"}
@@ -75,7 +119,7 @@ export default async function EditMarketPage({
           </CardContent>
         </Card>
       ) : (
-        <MarketForm market={market} />
+        <MarketForm market={market} options={marketOptions} hasTrades={hasTrades} />
       )}
     </div>
   );

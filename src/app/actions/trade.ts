@@ -27,7 +27,7 @@ export async function placeTrade(
 
   const result = await callRpc<Trade>("place_trade", {
     p_market_id: parsed.data.market_id,
-    p_side: parsed.data.side,
+    p_option_id: parsed.data.option_id,
     p_stake: parsed.data.stake,
   });
   if (!result.ok) return result;

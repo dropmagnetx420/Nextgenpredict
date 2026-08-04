@@ -23,7 +23,7 @@ export default async function DashboardPage() {
     getWallet(user.id),
     supabase
       .from("trades")
-      .select("*, market:markets(*)")
+      .select("*, market:markets(*), option:market_options(id, label)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(5),
@@ -147,13 +147,7 @@ export default async function DashboardPage() {
                       )}
                       <p className="mt-1 text-xs text-muted">
                         {fmtMoney(trade.stake)} USDG on{" "}
-                        <span
-                          className={
-                            trade.side === "yes" ? "text-emerald-300" : "text-rose-300"
-                          }
-                        >
-                          {trade.side.toUpperCase()}
-                        </span>{" "}
+                        <span className="text-accent">{trade.option?.label ?? "—"}</span>{" "}
                         at {fmtCents(trade.price)} · {fmtRelative(trade.created_at)}
                       </p>
                     </div>

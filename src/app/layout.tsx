@@ -55,30 +55,20 @@ export const viewport: Viewport = {
 };
 
 /**
- * Every page in this app reads from Supabase, so without real credentials the
- * whole site renders as blank shells. Say so once, here, instead of letting
- * each route fail on its own.
+ * Every page reads from Supabase; without real credentials queries return
+ * empty results instead. Surface that once as a slim banner so the site
+ * still renders and can be browsed.
  */
 function SetupNotice() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-4 px-6 text-sm">
-      <h1 className="font-display text-2xl font-bold">Supabase is not configured</h1>
-      <p className="text-muted">
-        <code>.env.local</code> still holds the <code>your-…</code> placeholders from{" "}
-        <code>.env.example</code>, so sign-up, sign-in and the dashboard cannot work.
-      </p>
-      <ol className="list-decimal space-y-1 pl-5 text-muted">
-        <li>Create a project at supabase.com.</li>
-        <li>
-          Copy Project Settings → API into <code>.env.local</code>:{" "}
-          <code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>,{" "}
-          <code>SUPABASE_SERVICE_ROLE_KEY</code>.
-        </li>
-        <li>
-          Run the migrations in <code>supabase/</code>, then restart <code>npm run dev</code>.
-        </li>
-      </ol>
-    </main>
+    <div
+      role="status"
+      className="relative z-50 border-b border-accent/30 bg-accent/10 px-4 py-2 text-center text-xs text-foreground"
+    >
+      Preview mode: Supabase is not connected, so markets and sign-in are disabled. Connect
+      Supabase and set <code className="font-mono">NEXT_PUBLIC_SUPABASE_URL</code> +{" "}
+      <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to go live.
+    </div>
   );
 }
 
@@ -87,7 +77,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceGrotesk.variable} min-h-dvh`}>
         <BlockchainBackground />
-        {hasSupabaseEnv() ? children : <SetupNotice />}
+        {!hasSupabaseEnv() && <SetupNotice />}
+        {children}
         <Toaster
           position="top-center"
           richColors

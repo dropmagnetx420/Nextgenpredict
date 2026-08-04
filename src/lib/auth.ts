@@ -3,6 +3,7 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { hasSupabaseEnv } from "@/lib/env";
 import type { AppUser, Wallet } from "@/lib/types";
 
 /**
@@ -10,6 +11,7 @@ import type { AppUser, Wallet } from "@/lib/types";
  * `cache` dedupes this across a single render pass.
  */
 export const getSessionUser = cache(async (): Promise<AppUser | null> => {
+  if (!hasSupabaseEnv()) return null;
   const supabase = await createClient();
   const {
     data: { user },
@@ -92,6 +94,7 @@ export const getWallet = cache(async (userId: string): Promise<Wallet | null> =>
  * it would otherwise pay for a `users` row it never reads.
  */
 export const hasSession = cache(async (): Promise<boolean> => {
+  if (!hasSupabaseEnv()) return false;
   const supabase = await createClient();
   const {
     data: { user },

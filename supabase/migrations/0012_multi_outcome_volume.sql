@@ -21,44 +21,117 @@
 -- ============================================================
 
 -- ---------------- MARKET_OPTIONS: N PER MARKET --------------
+-- The table shipped without `if not exists` originally, so a database
+-- reset or a partially applied migration set can leave it absent. Create
+-- it in its final post-0012 shape; the alters below then no-op.
+create table if not exists public.market_options (
+  id          uuid primary key default gen_random_uuid(),
+  market_id   uuid not null references public.markets(id) on delete cascade,
+  label       text not null,
+  price       numeric(6,2) not null check (price > 0 and price < 100),
+  volume      numeric(20,6) not null default 0,
+  is_winner   boolean,
+  is_active   boolean not null default true,
+  sort_order  integer not null default 0,
+  created_at  timestamptz not null default now()
+);
+
+-- Shed the binary-era shape *before* any row is written: `side` was
+-- `not null` with no default, so the backfill below cannot insert while
+-- the column still stands.
 alter table public.market_options drop constraint if exists market_options_market_id_side_key;
+alter table public.market_options drop column if exists side;
 
 alter table public.market_options
-  add column if not exists is_active boolean not null default true;
+  add column if not exists volume     numeric(20,6) not null default 0,
+  add column if not exists is_winner  boolean,
+  add column if not exists is_active  boolean not null default true,
+  add column if not exists sort_order integer not null default 0;
 
 -- Labels identify an option to the admin and inside notifications, so
 -- they have to be distinct within a market.
 create unique index if not exists market_options_label_uniq
   on public.market_options (market_id, lower(label));
 
+create index if not exists market_options_market_id_idx
+  on public.market_options (market_id);
+
 create index if not exists market_options_sort_idx
   on public.market_options (market_id, sort_order);
 
+-- The position's identity. Must exist before it can be backfilled.
+alter table public.trades add column if not exists market_option_id uuid;
+
 -- ------------------ BACKFILL EXISTING DATA ------------------
 -- Every pre-0012 market was binary, so it gets exactly two options
--- carrying its current prices, volumes and winner.
-insert into public.market_options (market_id, label, price, volume, is_winner, sort_order)
-select m.id, v.label, v.price, v.volume, v.is_winner, v.sort_order
-from public.markets m
-cross join lateral (values
-  ('Yes', m.yes_price,       m.yes_volume, case when m.outcome is null then null
-                                                when m.outcome = 'invalid' then null
-                                                else m.outcome = 'yes' end, 0),
-  ('No',  100 - m.yes_price, m.no_volume,  case when m.outcome is null then null
-                                                when m.outcome = 'invalid' then null
-                                                else m.outcome = 'no'  end, 1)
-) as v(label, price, volume, is_winner, sort_order)
-where not exists (
-  select 1 from public.market_options o where o.market_id = m.id
-);
+-- carrying its current prices, volumes and winner. The legacy columns
+-- may already be gone (re-run, or a database created after them), so
+-- each source is substituted with a neutral default when absent.
+do $$
+declare
+  v_has_price  boolean;
+  v_has_volume boolean;
+  v_has_out    boolean;
+  v_price      text;
+  v_yes_vol    text;
+  v_no_vol     text;
+  v_yes_win    text;
+  v_no_win     text;
+begin
+  select count(*) filter (where column_name = 'yes_price')  > 0,
+         count(*) filter (where column_name = 'yes_volume') > 0,
+         count(*) filter (where column_name = 'outcome')    > 0
+    into v_has_price, v_has_volume, v_has_out
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'markets';
+
+  v_price   := case when v_has_price  then 'm.yes_price'  else '50' end;
+  v_yes_vol := case when v_has_volume then 'm.yes_volume' else '0'  end;
+  v_no_vol  := case when v_has_volume then 'm.no_volume'  else '0'  end;
+
+  if v_has_out then
+    v_yes_win := $q$case when m.outcome is null or m.outcome::text = 'invalid'
+                         then null else m.outcome::text = 'yes' end$q$;
+    v_no_win  := $q$case when m.outcome is null or m.outcome::text = 'invalid'
+                         then null else m.outcome::text = 'no'  end$q$;
+  else
+    v_yes_win := 'null::boolean';
+    v_no_win  := 'null::boolean';
+  end if;
+
+  execute format($q$
+    insert into public.market_options
+      (market_id, label, price, volume, is_winner, sort_order)
+    select m.id, v.label, v.price, v.volume, v.is_winner, v.sort_order
+    from public.markets m
+    cross join lateral (values
+      ('Yes', (%1$s)::numeric,       (%2$s)::numeric, %4$s, 0),
+      ('No',  (100 - %1$s)::numeric, (%3$s)::numeric, %5$s, 1)
+    ) as v(label, price, volume, is_winner, sort_order)
+    where not exists (
+      select 1 from public.market_options o where o.market_id = m.id
+    )
+  $q$, v_price, v_yes_vol, v_no_vol, v_yes_win, v_no_win);
+end $$;
 
 -- Point historical trades at the option matching the side they took.
-update public.trades t
-set market_option_id = o.id
-from public.market_options o
-where o.market_id = t.market_id
-  and lower(o.label) = t.side::text
-  and t.market_option_id is null;
+-- Skipped when `side` is already gone, i.e. this is a re-run.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trades' and column_name = 'side'
+  ) then
+    execute $q$
+      update public.trades t
+      set market_option_id = o.id
+      from public.market_options o
+      where o.market_id = t.market_id
+        and lower(o.label) = t.side::text
+        and t.market_option_id is null
+    $q$;
+  end if;
+end $$;
 
 -- A trade with no resolvable option would break settlement. There
 -- should be none after the backfill; fail loudly rather than corrupt.
@@ -67,7 +140,8 @@ declare v_orphans integer;
 begin
   select count(*) into v_orphans from public.trades where market_option_id is null;
   if v_orphans > 0 then
-    raise exception 'MIGRATION_ABORTED: % trade(s) have no market_option_id', v_orphans;
+    raise exception
+      'MIGRATION_ABORTED: % trade(s) have no market_option_id', v_orphans;
   end if;
 end $$;
 
@@ -96,9 +170,8 @@ alter table public.markets drop column if exists yes_volume;
 alter table public.markets drop column if exists no_volume;
 alter table public.markets drop column if exists outcome;
 
--- market_options.side and the enums it depended on are now unused.
+-- The enums the binary shape depended on are now unused.
 -- resolve_market/place_trade are recreated below, so cascade is safe.
-alter table public.market_options drop column if exists side;
 drop function if exists public.derive_yes_price cascade;
 drop function if exists public.place_trade cascade;
 drop function if exists public.cancel_trade cascade;
@@ -667,6 +740,18 @@ create trigger market_options_guard_frozen
 -- Options are written through admin_save_market()/resolve_market()
 -- only, so the blanket admin write policy is no longer needed.
 drop policy if exists market_options_admin_write on public.market_options;
+
+-- Re-asserted because this migration may have created the table itself,
+-- in which case 0008 never got the chance to secure it. Without the
+-- read policy every market would render with no outcomes at all.
+alter table public.market_options enable row level security;
+
+drop policy if exists market_options_select_public on public.market_options;
+create policy market_options_select_public on public.market_options
+  for select using (
+    exists (select 1 from public.markets m
+            where m.id = market_id and (m.status <> 'draft' or public.is_admin()))
+  );
 
 grant execute on function public.reprice_market_options(uuid) to authenticated;
 grant execute on function public.admin_save_market(jsonb, jsonb, uuid) to authenticated;
